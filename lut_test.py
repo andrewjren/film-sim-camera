@@ -1,6 +1,7 @@
 from PIL import Image
 import numpy as np
 import math
+from datetime import datetime
 
 # https://kevinmartinjose.com/2021/04/27/film-simulations-from-scratch-using-python/
 def apply_hald_clut(hald_img, img):
@@ -25,5 +26,9 @@ def apply_hald_clut(hald_img, img):
 lut = Image.open("Fuji Velvia 50.png")
 source = Image.open("test.jpg")
 
+start = datetime.now()
 filtered = apply_hald_clut(lut, source)
+end = datetime.now()
 filtered.save('out.jpg')
+elapsed = end - start
+print("Time: {0}".format(elapsed.microseconds))
