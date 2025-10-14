@@ -43,6 +43,9 @@
 #include <memory>
 #include <thread>
 #include <libcamera/libcamera.h>
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+#include <gbm.h>
 
 static std::shared_ptr<libcamera::Camera> camera;
 
@@ -699,6 +702,134 @@ int main(int argc, char **argv)
 			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
 				iter->conn, errno);
 	}
+
+
+    /* OpenGL stuff */ 
+    int major, minor;
+    GLuint program, vert, frag, vbo;
+    GLint posLoc, colorLoc, result;
+
+    device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
+    if (getDisplay(&display) != 0)
+    {
+        fprintf(stderr, "Unable to get EGL display\n");
+        close(device);
+        return -1;
+    }
+    GLuint program;
+    if (eglInitialize(display, &major, &minor) == EGL_FALSE)
+    {
+        fprintf(stderr, "Failed to get EGL version! Error: %s\n",
+                eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    // Make sure that we can use OpenGL in this EGL app.
+    eglBindAPI(EGL_OPENGL_API);
+
+    printf("Initialized EGL version: %d.%d\n", major, minor);
+
+   EGLint count;
+    EGLint numConfigs;
+    eglGetConfigs(display, NULL, 0, &count);
+    EGLConfig *configs = malloc(count * sizeof(configs));
+
+    if (!eglChooseConfig(display, configAttribs, configs, count, &numConfigs))
+    {
+        fprintf(stderr, "Failed to get EGL configs! Error: %s\n",
+                eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    // I am not exactly sure why the EGL config must match the GBM format.
+    // But it works!
+    int configIndex = matchConfigToVisual(display, GBM_FORMAT_XRGB8888, configs, numConfigs);
+    if (configIndex < 0)
+    {
+        fprintf(stderr, "Failed to find matching EGL config! Error: %s\n",
+                eglGetErrorStr());
+        eglTerminate(display);
+        gbm_surface_destroy(gbmSurface);
+        gbm_device_destroy(gbmDevice);
+        return EXIT_FAILURE;
+    }
+
+    EGLContext context =
+        eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
+    if (context == EGL_NO_CONTEXT)
+    {
+        fprintf(stderr, "Failed to create EGL context! Error: %s\n",
+                eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    EGLSurface surface =
+        eglCreateWindowSurface(display, configs[configIndex], gbmSurface, NULL);
+    if (surface == EGL_NO_SURFACE)
+    {
+        fprintf(stderr, "Failed to create EGL surface! Error: %s\n",
+                eglGetErrorStr());
+        eglDestroyContext(display, context);
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    free(configs);
+    eglMakeCurrent(display, surface, surface, context);
+
+    // Set GL Viewport size, always needed!
+    glViewport(0, 0, desiredWidth, desiredHeight);
+
+    // Get GL Viewport size and test if it is correct.
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // viewport[2] and viewport[3] are viewport width and height respectively
+    printf("GL Viewport size: %dx%d\n", viewport[2], viewport[3]);
+
+    if (viewport[2] != desiredWidth || viewport[3] != desiredHeight)
+    {
+        fprintf(stderr, "Error! The glViewport returned incorrect values! Something is wrong!\n");
+        eglDestroyContext(display, context);
+        eglDestroySurface(display, surface);
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    // Clear whole screen (front buffer)
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Create a shader program
+    // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
+    // Read an OpenGL tutorial to properly implement shader creation
+    program = glCreateProgram();
+    glUseProgram(program);
+    vert = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vert, 1, &vertexShaderCode, NULL);
+    glCompileShader(vert);
+    frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(frag, 1, &fragmentShaderCode, NULL);
+    glCompileShader(frag);
+    glAttachShader(program, frag);
+    glAttachShader(program, vert);
+    glLinkProgram(program);
+    glUseProgram(program);
+
+    // Create Vertex Buffer Object
+    // Again, NO ERRRO CHECKING IS DONE! (for the purpose of this example)
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
+
 
 	/* draw some colors for 5seconds */
 	camera->start();
