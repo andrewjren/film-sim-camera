@@ -59,6 +59,15 @@ static int modeset_open(int *out, const char *node);
 static int modeset_prepare(int fd);
 static void modeset_draw(void);
 static void modeset_cleanup(int fd);
+int device;
+uint32_t connectorId;
+drmModeModeInfo mode;
+drmModeCrtc *crtc;
+struct gbm_device *gbmDevice;
+struct gbm_surface *gbmSurface;
+
+static struct gbm_bo *previousBo = NULL;
+static uint32_t previousFb;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -559,6 +568,194 @@ static void requestComplete(libcamera::Request *request)
     }
 }
 
+static drmModeConnector *getConnector(drmModeRes *resources)
+{
+    for (int i = 0; i < resources->count_connectors; i++)
+    {
+        drmModeConnector *connector = drmModeGetConnector(device, resources->connectors[i]);
+        if (connector->connection == DRM_MODE_CONNECTED)
+        {
+            return connector;
+        }
+        drmModeFreeConnector(connector);
+    }
+
+    return NULL;
+}
+
+static drmModeEncoder *findEncoder(drmModeConnector *connector)
+{
+    if (connector->encoder_id)
+    {
+        return drmModeGetEncoder(device, connector->encoder_id);
+    }
+    return NULL;
+}
+
+static int getDisplay(EGLDisplay *display)
+{
+    drmModeRes *resources = drmModeGetResources(device);
+    if (resources == NULL)
+    {
+        fprintf(stderr, "Unable to get DRM resources\n");
+        return -1;
+    }
+
+    drmModeConnector *connector = getConnector(resources);
+    if (connector == NULL)
+    {
+        fprintf(stderr, "Unable to get connector\n");
+        drmModeFreeResources(resources);
+        return -1;
+    }
+
+    connectorId = connector->connector_id;
+    mode = connector->modes[0];
+    printf("resolution: %ix%i\n", mode.hdisplay, mode.vdisplay);
+
+    drmModeEncoder *encoder = findEncoder(connector);
+    if (encoder == NULL)
+    {
+        fprintf(stderr, "Unable to get encoder\n");
+        drmModeFreeConnector(connector);
+        drmModeFreeResources(resources);
+        return -1;
+    }
+
+    crtc = drmModeGetCrtc(device, encoder->crtc_id);
+    drmModeFreeEncoder(encoder);
+    drmModeFreeConnector(connector);
+    drmModeFreeResources(resources);
+    gbmDevice = gbm_create_device(device);
+    gbmSurface = gbm_surface_create(gbmDevice, mode.hdisplay, mode.vdisplay, GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+    *display = eglGetDisplay(gbmDevice);
+    return 0;
+}
+
+static int matchConfigToVisual(EGLDisplay display, EGLint visualId, EGLConfig *configs, int count)
+{
+    EGLint id;
+    for (int i = 0; i < count; ++i)
+    {
+        if (!eglGetConfigAttrib(display, configs[i], EGL_NATIVE_VISUAL_ID, &id))
+            continue;
+        if (id == visualId)
+            return i;
+    }
+    return -1;
+}
+
+
+static void gbmClean()
+{
+    // set the previous crtc
+    drmModeSetCrtc(device, crtc->crtc_id, crtc->buffer_id, crtc->x, crtc->y, &connectorId, 1, &crtc->mode);
+    drmModeFreeCrtc(crtc);
+
+    if (previousBo)
+    {
+        drmModeRmFB(device, previousFb);
+        gbm_surface_release_buffer(gbmSurface, previousBo);
+    }
+
+    gbm_surface_destroy(gbmSurface);
+    gbm_device_destroy(gbmDevice);
+}
+
+// Get the EGL error back as a string. Useful for debugging.
+static const char *eglGetErrorStr()
+{
+    switch (eglGetError())
+    {
+    case EGL_SUCCESS:
+        return "The last function succeeded without error.";
+    case EGL_NOT_INITIALIZED:
+        return "EGL is not initialized, or could not be initialized, for the "
+               "specified EGL display connection.";
+    case EGL_BAD_ACCESS:
+        return "EGL cannot access a requested resource (for example a context "
+               "is bound in another thread).";
+    case EGL_BAD_ALLOC:
+        return "EGL failed to allocate resources for the requested operation.";
+    case EGL_BAD_ATTRIBUTE:
+        return "An unrecognized attribute or attribute value was passed in the "
+               "attribute list.";
+    case EGL_BAD_CONTEXT:
+        return "An EGLContext argument does not name a valid EGL rendering "
+               "context.";
+    case EGL_BAD_CONFIG:
+        return "An EGLConfig argument does not name a valid EGL frame buffer "
+               "configuration.";
+    case EGL_BAD_CURRENT_SURFACE:
+        return "The current surface of the calling thread is a window, pixel "
+               "buffer or pixmap that is no longer valid.";
+    case EGL_BAD_DISPLAY:
+        return "An EGLDisplay argument does not name a valid EGL display "
+               "connection.";
+    case EGL_BAD_SURFACE:
+        return "An EGLSurface argument does not name a valid surface (window, "
+               "pixel buffer or pixmap) configured for GL rendering.";
+    case EGL_BAD_MATCH:
+        return "Arguments are inconsistent (for example, a valid context "
+               "requires buffers not supplied by a valid surface).";
+    case EGL_BAD_PARAMETER:
+        return "One or more argument values are invalid.";
+    case EGL_BAD_NATIVE_PIXMAP:
+        return "A NativePixmapType argument does not refer to a valid native "
+               "pixmap.";
+    case EGL_BAD_NATIVE_WINDOW:
+        return "A NativeWindowType argument does not refer to a valid native "
+               "window.";
+    case EGL_CONTEXT_LOST:
+        return "A power management event has occurred. The application must "
+               "destroy all contexts and reinitialise OpenGL ES state and "
+               "objects to continue rendering.";
+    default:
+        break;
+    }
+    return "Unknown error!";
+}
+
+
+
+// The following array holds vec3 data of
+// three vertex positions
+static const GLfloat vertices[] = {
+    -1.0f,
+    -1.0f,
+    0.0f,
+    1.0f,
+    -1.0f,
+    0.0f,
+    0.0f,
+    1.0f,
+    0.0f,
+};
+
+// The following are GLSL shaders for rendering a triangle on the screen
+#define STRINGIFY(x) #x
+static const char *vertexShaderCode = STRINGIFY(
+    attribute vec3 pos; void main() { gl_Position = vec4(pos, 1.0); });
+
+static const char *fragmentShaderCode =
+    STRINGIFY(uniform vec4 color; void main() { gl_FragColor = vec4(color); });
+
+
+// The following code was adopted from
+// https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
+// and is licensed under the Unlicense.
+static const EGLint configAttribs[] = {
+    EGL_RED_SIZE, 8,
+    EGL_GREEN_SIZE, 8,
+    EGL_BLUE_SIZE, 8,
+    EGL_DEPTH_SIZE, 8,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+    EGL_NONE};
+
+static const EGLint contextAttribs[] = {
+    EGL_CONTEXT_CLIENT_VERSION, 2,
+    EGL_NONE};
+
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
  * to use and we have a framebuffer of the correct size that we can write to.
@@ -599,6 +796,7 @@ int main(int argc, char **argv)
 	int ret, fd;
 	const char *card;
 	struct modeset_dev *iter;
+	EGLDisplay display;
 
         /* try to open camera */
 	std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
@@ -708,6 +906,9 @@ int main(int argc, char **argv)
     int major, minor;
     GLuint program, vert, frag, vbo;
     GLint posLoc, colorLoc, result;
+    // We will use the screen resolution as the desired width and height for the viewport.
+    int desiredWidth = mode.hdisplay;
+    int desiredHeight = mode.vdisplay;
 
     device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
     if (getDisplay(&display) != 0)
@@ -716,7 +917,6 @@ int main(int argc, char **argv)
         close(device);
         return -1;
     }
-    GLuint program;
     if (eglInitialize(display, &major, &minor) == EGL_FALSE)
     {
         fprintf(stderr, "Failed to get EGL version! Error: %s\n",
@@ -734,7 +934,7 @@ int main(int argc, char **argv)
    EGLint count;
     EGLint numConfigs;
     eglGetConfigs(display, NULL, 0, &count);
-    EGLConfig *configs = malloc(count * sizeof(configs));
+    EGLConfig *configs = static_cast<EGLConfig*>(malloc(count * sizeof(configs)));
 
     if (!eglChooseConfig(display, configAttribs, configs, count, &numConfigs))
     {
@@ -770,7 +970,7 @@ int main(int argc, char **argv)
     }
 
     EGLSurface surface =
-        eglCreateWindowSurface(display, configs[configIndex], gbmSurface, NULL);
+        eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
     if (surface == EGL_NO_SURFACE)
     {
         fprintf(stderr, "Failed to create EGL surface! Error: %s\n",
