@@ -27,7 +27,17 @@ target_include_directories(modeset PRIVATE ${DRM_INCLUDE_DIRS} ${LIBCAMERA_INCLU
 target_link_libraries(modeset PRIVATE ${DRM_LIBRARIES} ${LIBCAMERA_LINK_LIBRARIES})
 
 add_executable(camdrm camdrm.cpp)
-target_include_directories(camdrm PRIVATE ${DRM_INCLUDE_DIRS} ${LIBCAMERA_INCLUDE_DIRS})
-target_link_libraries(camdrm PRIVATE ${DRM_LIBRARIES} ${LIBCAMERA_LINK_LIBRARIES})
+add_executable(camdrm camdrm.cpp)
+target_include_directories(camdrm PRIVATE 
+  ${DRM_INCLUDE_DIRS} 
+  ${LIBCAMERA_INCLUDE_DIRS} 
+  ${OPENGL_INCLUDE_DIRS} 
+  ${OPENGL_EGL_INCLUDE_DIRS})
 
+target_link_libraries(camdrm PRIVATE 
+  ${DRM_LIBRARIES} 
+  ${LIBCAMERA_LINK_LIBRARIES} 
+  OpenGL::OpenGL 
+  OpenGL::EGL 
+  OpenGL::GLES2)
 

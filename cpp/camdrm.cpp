@@ -476,49 +476,63 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 	dev->size = creq.size;
 	dev->handle = creq.handle;
 
-	/* create framebuffer object for the dumb-buffer */
-	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
-			   dev->handle, &dev->fb);
-	if (ret) {
-		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
-			errno);
-		ret = -errno;
-		goto err_destroy;
-	}
+	enum Steps {create_framebuffer, prepare_buffer, memory_map, clear_buffer, err_fb, err_destroy, success};
+	Steps step = create_framebuffer;
+	switch(step)
+	{
+		/* create framebuffer object for the dumb-buffer */
+		case create_framebuffer: 
+			ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
+					dev->handle, &dev->fb);
+			if (ret) {
+				fprintf(stderr, "cannot create framebuffer (%d): %m\n",
+					errno);
+				ret = -errno;
+				step = err_destroy;
+			}
+			else { step = prepare_buffer; }
 
-	/* prepare buffer for memory mapping */
-	memset(&mreq, 0, sizeof(mreq));
-	mreq.handle = dev->handle;
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
-	if (ret) {
-		fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
-			errno);
-		ret = -errno;
-		goto err_fb;
-	}
+		/* prepare buffer for memory mapping */
+		case prepare_buffer:
+			memset(&mreq, 0, sizeof(mreq));
+			mreq.handle = dev->handle;
+			ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+			if (ret) {
+				fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
+					errno);
+				ret = -errno;
+				step = err_fb;
+			}
+			else { step = memory_map; }
 
-	/* perform actual memory mapping */
-	dev->map = static_cast<uint8_t*>(mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-		        fd, mreq.offset));
-	if (dev->map == MAP_FAILED) {
-		fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
-			errno);
-		ret = -errno;
-		goto err_fb;
-	}
+		/* perform actual memory mapping */
+		case memory_map: 
+			dev->map = static_cast<uint8_t*>(mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
+						fd, mreq.offset));
+			if (dev->map == MAP_FAILED) {
+				fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
+					errno);
+				ret = -errno;
+				step = err_fb;
+			}
+			else {step = clear_buffer; }
 
-	/* clear the framebuffer to 0 */
-	memset(dev->map, 0, dev->size);
+		/* clear the framebuffer to 0 */
+		case clear_buffer: 
+			memset(dev->map, 0, dev->size);
+			step = success; 
+			break; 
+
+		case err_fb: 
+			drmModeRmFB(fd, dev->fb);
+		case err_destroy:
+			memset(&dreq, 0, sizeof(dreq));
+			dreq.handle = dev->handle;
+			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+			return ret;
+	}
 
 	return 0;
-
-err_fb:
-	drmModeRmFB(fd, dev->fb);
-err_destroy:
-	memset(&dreq, 0, sizeof(dreq));
-	dreq.handle = dev->handle;
-	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
-	return ret;
 }
 
 static void requestComplete(libcamera::Request *request)
@@ -884,12 +898,31 @@ int main(int argc, char **argv)
 	/* open the DRM device */
 	ret = modeset_open(&fd, card);
 	if (ret)
-		goto out_return;
+	{
+		if (ret) {
+			errno = -ret;
+			fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+		} 
+		else {
+			fprintf(stderr, "exiting\n");
+		}
+		return ret;
+	}
 
 	/* prepare all connectors and CRTCs */
 	ret = modeset_prepare(fd);
-	if (ret)
-		goto out_close;
+	
+	if (ret) {
+		close(fd);
+		if (ret) {
+			errno = -ret;
+			fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+		} 
+		else {
+			fprintf(stderr, "exiting\n");
+		}
+		return ret;
+	}
 
 	/* perform actual modesetting on each found connector+CRTC */
 	for (iter = modeset_list; iter; iter = iter->next) {
