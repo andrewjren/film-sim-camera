@@ -43,9 +43,9 @@
 #include <memory>
 #include <thread>
 #include <libcamera/libcamera.h>
+#include <gbm.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
-#include <gbm.h>
 
 static std::shared_ptr<libcamera::Camera> camera;
 
