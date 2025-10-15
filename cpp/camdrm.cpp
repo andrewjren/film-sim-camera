@@ -57,7 +57,6 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
 			     struct modeset_dev *dev);
 static int modeset_open(int *out, const char *node);
 static int modeset_prepare(int fd);
-static void modeset_draw(void);
 static void modeset_cleanup(int fd);
 int device;
 uint32_t connectorId;
@@ -911,7 +910,7 @@ int main(int argc, char **argv)
 
 	/* prepare all connectors and CRTCs */
 	ret = modeset_prepare(fd);
-	
+
 	if (ret) {
 		close(fd);
 		if (ret) {
@@ -1068,7 +1067,7 @@ int main(int argc, char **argv)
 	camera->start();
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
-	//modeset_draw();
+	
 	std::this_thread::sleep_for(std::chrono::seconds(10));
 
 	/* cleanup everything */
@@ -1114,57 +1113,6 @@ static uint8_t next_color(bool *up, uint8_t cur, unsigned int mod)
 	return next;
 }
 
-/*
- * modeset_draw(): This draws a solid color into all configured framebuffers.
- * Every 100ms the color changes to a slightly different color so we get some
- * kind of smoothly changing color-gradient.
- *
- * The color calculation can be ignored as it is pretty boring. So the
- * interesting stuff is iterating over "modeset_list" and then through all lines
- * and width. We then set each pixel individually to the current color.
- *
- * We do this 50 times as we sleep 100ms after each redraw round. This makes
- * 50*100ms = 5000ms = 5s so it takes about 5seconds to finish this loop.
- *
- * Please note that we draw directly into the framebuffer. This means that you
- * will see flickering as the monitor might refresh while we redraw the screen.
- * To avoid this you would need to use two framebuffers and a call to
- * drmModeSetCrtc() to switch between both buffers.
- * You can also use drmModePageFlip() to do a vsync'ed pageflip. But this is
- * beyond the scope of this document.
- */
-
-static void modeset_draw(void)
-{
-	uint8_t r, g, b;
-	bool r_up, g_up, b_up;
-	unsigned int i, j, k, off;
-	struct modeset_dev *iter;
-
-	srand(time(NULL));
-	r = rand() % 0xff;
-	g = rand() % 0xff;
-	b = rand() % 0xff;
-	r_up = g_up = b_up = true;
-
-	for (i = 0; i < 50; ++i) {
-		r = next_color(&r_up, r, 20);
-		g = next_color(&g_up, g, 10);
-		b = next_color(&b_up, b, 5);
-
-		for (iter = modeset_list; iter; iter = iter->next) {
-			for (j = 0; j < iter->height; ++j) {
-				for (k = 0; k < iter->width; ++k) {
-					off = iter->stride * j + k * 4;
-					*(uint32_t*)&iter->map[off] =
-						     (r << 16) | (g << 8) | b;
-				}
-			}
-		}
-
-		usleep(100000);
-	}
-}
 
 /*
  * modeset_cleanup(fd): This cleans up all the devices we created during
