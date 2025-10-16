@@ -47,6 +47,9 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
@@ -58,6 +61,7 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
 static int modeset_open(int *out, const char *node);
 static int modeset_prepare(int fd);
 static void modeset_cleanup(int fd);
+
 int device;
 uint32_t connectorId;
 drmModeModeInfo mode;
@@ -751,7 +755,21 @@ static const char *vertexShaderCode = STRINGIFY(
     attribute vec3 pos; void main() { gl_Position = vec4(pos, 1.0); });
 
 static const char *fragmentShaderCode =
-    STRINGIFY(uniform vec4 color; void main() { gl_FragColor = vec4(color); });
+    STRINGIFY(
+/* Fragment shader for color correction */
+uniform sampler2D image;
+uniform sampler3D clut;
+
+void main()
+{
+     vec4 color;
+         /* reading out a pixel */
+     color = texture2D(image, gl_TexCoord[0].st);
+         /* corecting the color using CLUT */
+     color = texture3D(clut, color.rgb);
+     gl_FragColor = color;
+}
+);
 
 
 // The following code was adopted from
@@ -1062,6 +1080,36 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
 
+
+	// load test image  
+	int test_width, test_height, test_nrChannels;
+	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
+	if (!test_data)
+	{
+		std::cout << "Failed to load texture" << std::endl;
+		return 0;
+	}
+	unsigned int test_texture;
+	glGenTextures(1, &test_texture); 
+	glBindTexture(GL_TEXTURE_2D, test_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, test_data);
+	//glGenerateMipmap(GL_TEXTURE_2D);
+	stbi_image_free(test_data);
+
+	// load lut texture 
+	int lut_width, lut_height, lut_depth, lut_nrChannels;
+	unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
+	if (!lut_data)
+	{
+		std::cout << "Failed to load texture" << std::endl;
+		return 0;
+	}
+	unsigned int lut_texture;
+	glGenTextures(1, &lut_texture); 
+	glBindTexture(GL_TEXTURE_3D, lut_texture);
+	glTexImage2D(GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	//glGenerateMipmap(GL_TEXTURE_2D);
+	stbi_image_free(lut_data);
 
 	/* draw some colors for 5seconds */
 	camera->start();
