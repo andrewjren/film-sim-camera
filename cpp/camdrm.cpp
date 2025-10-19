@@ -1002,13 +1002,8 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-	// Create OpenGL ES 3 context
-    const EGLint ctxAttribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE
-    };
     EGLContext context =
-        eglCreateContext(default_display, cfg, EGL_NO_CONTEXT, contextAttribs);
+        eglCreateContext(display, cfg, EGL_NO_CONTEXT, contextAttribs);
     if (context == EGL_NO_CONTEXT)
     {
         fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
@@ -1030,7 +1025,7 @@ int main(int argc, char **argv)
     }
 
     free(configs);
-    //eglMakeCurrent(display, surface, surface, context);
+    eglMakeCurrent(display, surface, surface, context);
 
     // Set GL Viewport size, always needed!
     glViewport(0, 0, desiredWidth, desiredHeight);
