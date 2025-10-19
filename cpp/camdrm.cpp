@@ -48,8 +48,9 @@
 //#include <GLES2/gl2.h>
 #include <GLES3/gl3.h>
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
-
+#include "stb_image_write.h"
 static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
@@ -963,11 +964,8 @@ int main(int argc, char **argv)
 
     /* OpenGL stuff */ 
     int major, minor;
-    GLuint program, vert, frag, vbo;
-    GLint posLoc, colorLoc, result;
-    // We will use the screen resolution as the desired width and height for the viewport.
-    int desiredWidth = mode.hdisplay;
-    int desiredHeight = mode.vdisplay;
+    GLuint program, vert, frag;
+    GLint colorLoc, result;
 
     device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
     if (getDisplay(&display) != 0)
@@ -984,6 +982,10 @@ int main(int argc, char **argv)
         gbmClean();
         return EXIT_FAILURE;
     }
+    // We will use the screen resolution as the desired width and height for the viewport.
+    int desiredWidth = mode.hdisplay;
+    int desiredHeight = mode.vdisplay;
+
 
     // Make sure that we can use OpenGL in this EGL app.
     eglBindAPI(EGL_OPENGL_API);
@@ -1085,9 +1087,9 @@ int main(int argc, char **argv)
 
     // Create Vertex Buffer Object
     // Again, NO ERRRO CHECKING IS DONE! (for the purpose of this example)
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
+    //glGenBuffers(1, &vbo);
+    //glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    //glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
 
 	
 	// load test image  
@@ -1121,8 +1123,8 @@ int main(int argc, char **argv)
 	stbi_image_free(lut_data);
 
 	// Set uniforms
-    glUniform1i(glGetUniformLocation(prog, "image"), 0);
-    glUniform1i(glGetUniformLocation(prog, "clut"), 1);
+    glUniform1i(glGetUniformLocation(program, "image"), 0);
+    glUniform1i(glGetUniformLocation(program, "clut"), 1);
 
     // Setup full screen quad
     float quad[] = {
@@ -1139,8 +1141,8 @@ int main(int argc, char **argv)
     glGenBuffers(1,&vbo);
     glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STATIC_DRAW);
-    GLint posLoc = glGetAttribLocation(prog,"aPos");
-    GLint uvLoc = glGetAttribLocation(prog,"aTexCoord");
+    GLint posLoc = glGetAttribLocation(program,"aPos");
+    GLint uvLoc = glGetAttribLocation(program,"aTexCoord");
     glVertexAttribPointer(posLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)0);
     glEnableVertexAttribArray(posLoc);
     glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
@@ -1162,7 +1164,7 @@ int main(int argc, char **argv)
     glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
 	// Save to PNG
-    stbi_write_png("output.png", test_width, test_height, 4, flipped.data(), test_width * 4);
+    stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
     std::cout << "Saved color-corrected image to output.png\n";
 
 	/* draw some colors for 5seconds */
