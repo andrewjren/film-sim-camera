@@ -734,22 +734,6 @@ static const char *eglGetErrorStr()
     return "Unknown error!";
 }
 
-
-
-// The following array holds vec3 data of
-// three vertex positions
-/*static const GLfloat vertices[] = {
-    -1.0f,
-    -1.0f,
-    0.0f,
-    1.0f,
-    -1.0f,
-    0.0f,
-    0.0f,
-    1.0f,
-    0.0f,
-};*/
-
 // The following are GLSL shaders for rendering a triangle on the screen
 //#define STRINGIFY(x) #x
 static const char *vertexShaderCode = R"(
@@ -866,8 +850,8 @@ int main(int argc, char **argv)
 	std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
 	libcamera::StreamConfiguration &streamConfig = config->at(0);
 	std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	streamConfig.size.width = 1944;
-	streamConfig.size.height = 2592;
+	streamConfig.size.width = 480;
+	streamConfig.size.height = 640;
 	config->validate();
 	std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
 	camera->configure(config.get());
@@ -991,7 +975,7 @@ int main(int argc, char **argv)
 
     printf("Initialized EGL version: %d.%d\n", major, minor);
 
-   EGLint count;
+    EGLint count;
     EGLint numConfigs;
     eglGetConfigs(display, NULL, 0, &count);
     EGLConfig *configs = static_cast<EGLConfig*>(malloc(count * sizeof(configs)));
@@ -1042,7 +1026,7 @@ int main(int argc, char **argv)
     }
 
     free(configs);
-    eglMakeCurrent(display, surface, surface, context);
+    //eglMakeCurrent(display, surface, surface, context);
 
     // Set GL Viewport size, always needed!
     glViewport(0, 0, desiredWidth, desiredHeight);
@@ -1063,10 +1047,6 @@ int main(int argc, char **argv)
         gbmClean();
         return EXIT_FAILURE;
     }
-
-    // Clear whole screen (front buffer)
-    //Color(0.0f, 0.0f, 0.0f, 1.0f);
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
@@ -1099,21 +1079,21 @@ int main(int argc, char **argv)
     std::cout << "after using program: " << glGetError() << std::endl;
     GLint isCompiled = 0;
     glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
-if(isCompiled == GL_FALSE)
-{
-	GLint maxLength = 0;
-	glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
+	if(isCompiled == GL_FALSE)
+	{
+		GLint maxLength = 0;
+		glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
 
-	// The maxLength includes the NULL character
-	std::vector<GLchar> errorLog(maxLength);
-	glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
-	std::cout << &errorLog[0] << std::endl;
+		// The maxLength includes the NULL character
+		std::vector<GLchar> errorLog(maxLength);
+		glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
+		std::cout << &errorLog[0] << std::endl;
 
-	// Provide the infolog in whatever manor you deem best.
-	// Exit with failure.
-	glDeleteShader(frag); // Don't leak the shader.
-	return 0;
-}
+		// Provide the infolog in whatever manor you deem best.
+		// Exit with failure.
+		glDeleteShader(frag); // Don't leak the shader.
+		return 0;
+	}
 	// load test image  
 	int test_width, test_height, test_nrChannels;
 	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
