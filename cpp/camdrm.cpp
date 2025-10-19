@@ -45,8 +45,8 @@
 #include <libcamera/libcamera.h>
 #include <gbm.h>
 #include <EGL/egl.h>
-#include <GLES2/gl2.h>
-
+//#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -1106,11 +1106,10 @@ int main(int argc, char **argv)
 	}
 	unsigned int lut_texture;
 	glGenTextures(1, &lut_texture); 
-	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage2D(GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	glBindTexture(EGL_GL_TEXTURE_3D, lut_texture);
+	glTexImage3D(EGL_GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(lut_data);
-
 	/* draw some colors for 5seconds */
 	camera->start();
 	for (std::unique_ptr<libcamera::Request> &request : requests)
