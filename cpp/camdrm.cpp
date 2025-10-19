@@ -738,7 +738,7 @@ static const char *eglGetErrorStr()
 
 // The following array holds vec3 data of
 // three vertex positions
-static const GLfloat vertices[] = {
+/*static const GLfloat vertices[] = {
     -1.0f,
     -1.0f,
     0.0f,
@@ -748,7 +748,7 @@ static const GLfloat vertices[] = {
     0.0f,
     1.0f,
     0.0f,
-};
+};*/
 
 // The following are GLSL shaders for rendering a triangle on the screen
 #define STRINGIFY(x) #x
@@ -983,8 +983,8 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     // We will use the screen resolution as the desired width and height for the viewport.
-    int desiredWidth = mode.hdisplay;
-    int desiredHeight = mode.vdisplay;
+    int desiredWidth = 2592;
+    int desiredHeight = 1944;
 
 
     // Make sure that we can use OpenGL in this EGL app.
