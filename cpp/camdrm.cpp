@@ -751,9 +751,9 @@ static const char *eglGetErrorStr()
 };*/
 
 // The following are GLSL shaders for rendering a triangle on the screen
-#define STRINGIFY(x) #x
-static const char *vertexShaderCode = STRINGIFY(
-/*    attribute vec3 pos; void main() { gl_Position = vec4(pos, 1.0); }*/
+//#define STRINGIFY(x) #x
+static const char *vertexShaderCode = R"(
+#version 300 es
 in vec2 aPos;
 in vec2 aTexCoord;
 out vec2 TexCoord;
@@ -761,25 +761,24 @@ void main() {
     TexCoord = aTexCoord;
     gl_Position = vec4(aPos, 0.0, 1.0);
 }
-);
+)";
 
-static const char *fragmentShaderCode =
-    STRINGIFY(
-/* Fragment shader for color correction */
+static const char *fragmentShaderCode = R"(
+#version 300 es
+precision highp float;
+precision highp sampler3D;
 uniform sampler2D image;
 uniform sampler3D clut;
+in vec2 TexCoord;
 out vec4 fragColor;
 
 void main()
 {
     vec4 color;
-    /* reading out a pixel */
-    color = texture2D(image, gl_TexCoord[0].st);
-    /* corecting the color using CLUT */
-    color = texture3D(clut, color.rgb);
+    color = texture2D(image, TexCoord);
     fragColor = color;
 }
-);
+)";
 
 
 // The following code was adopted from
@@ -867,8 +866,8 @@ int main(int argc, char **argv)
 	std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
 	libcamera::StreamConfiguration &streamConfig = config->at(0);
 	std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	streamConfig.size.width = 480;
-	streamConfig.size.height = 640;
+	streamConfig.size.width = 1944;
+	streamConfig.size.height = 2592;
 	config->validate();
 	std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
 	camera->configure(config.get());
@@ -1072,17 +1071,22 @@ int main(int argc, char **argv)
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
+    std::cout << "before creating program: " << glGetError() << std::endl;
     program = glCreateProgram();
     //glUseProgram(program);
     vert = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vert, 1, &vertexShaderCode, NULL);
     glCompileShader(vert);
+    std::cout << "vertex shade: " << glGetError() << std::endl;
     frag = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(frag, 1, &fragmentShaderCode, NULL);
     glCompileShader(frag);
+    std::cout << "frag shader: " << glGetError() << std::endl;
     glAttachShader(program, frag);
     glAttachShader(program, vert);
+    std::cout << "attaching shaders: " << glGetError() << std::endl;
     glLinkProgram(program);
+    std::cout << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
     // Create Vertex Buffer Object
@@ -1092,6 +1096,24 @@ int main(int argc, char **argv)
     //glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
 
 	
+    std::cout << "after using program: " << glGetError() << std::endl;
+    GLint isCompiled = 0;
+    glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
+if(isCompiled == GL_FALSE)
+{
+	GLint maxLength = 0;
+	glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
+
+	// The maxLength includes the NULL character
+	std::vector<GLchar> errorLog(maxLength);
+	glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
+	std::cout << &errorLog[0] << std::endl;
+
+	// Provide the infolog in whatever manor you deem best.
+	// Exit with failure.
+	glDeleteShader(frag); // Don't leak the shader.
+	return 0;
+}
 	// load test image  
 	int test_width, test_height, test_nrChannels;
 	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
@@ -1119,15 +1141,17 @@ int main(int argc, char **argv)
 	}
 	unsigned int lut_texture;
 	glGenTextures(1, &lut_texture); 
-	glBindTexture(EGL_GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(EGL_GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	glBindTexture(GL_TEXTURE_3D, lut_texture);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(lut_data);
 
+    std::cout << "before setting uniforms: " << glGetError() << std::endl;
 	// Set uniforms
     glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
 
+    std::cout << "after setting uniforms: " << glGetError() << std::endl;
     // Setup full screen quad
     float quad[] = {
         -1, -1, 0, 0,
@@ -1150,16 +1174,20 @@ int main(int argc, char **argv)
     glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
     glEnableVertexAttribArray(uvLoc);
 
+    std::cout << "after running gL program: " << glGetError() << std::endl;
+
 	// Bind textures
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
+    std::cout << "after binding textures: " << glGetError() << std::endl;
 
 	// Draw
     glViewport(0,0,test_width,test_height);
     glClear(GL_COLOR_BUFFER_BIT);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    std::cout << "after drawing: " << glGetError() << std::endl;
 
 	// Read pixels
     std::vector<unsigned char> pixels(test_width * test_height * 4);
@@ -1209,24 +1237,6 @@ out_return:
 		fprintf(stderr, "exiting\n");
 	}
 	return ret;
-}
-
-/*
- * A short helper function to compute a changing color value. No need to
- * understand it.
- */
-
-static uint8_t next_color(bool *up, uint8_t cur, unsigned int mod)
-{
-	uint8_t next;
-
-	next = cur + (*up ? 1 : -1) * (rand() % mod);
-	if ((*up && next < cur) || (!*up && next > cur)) {
-		*up = !*up;
-		next = cur;
-	}
-
-	return next;
 }
 
 
