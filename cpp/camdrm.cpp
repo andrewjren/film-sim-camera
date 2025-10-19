@@ -949,6 +949,56 @@ int main(int argc, char **argv)
     int major, minor;
     GLuint program, vert, frag;
     GLint colorLoc, result;
+
+	EGLDisplay default_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (default_display == EGL_NO_DISPLAY) 
+    {
+	    fprintf(stderr, "Failed to get default display! Error: %s\n", eglGetErrorStr());
+	    return EXIT_FAILURE;
+    }
+
+    if (!eglInitialize(default_display, nullptr, nullptr))
+    {
+	    fprintf(stderr, "Failed to initialize default display. Error: %s\n", eglGetErrorStr());
+	    return EXIT_FAILURE;
+    }
+
+	// Choose EGL config that supports OpenGL ES 3
+	const EGLint cfgAttribs[] = {
+        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 0,
+        EGL_STENCIL_SIZE, 0,
+        EGL_NONE
+    };
+    EGLConfig cfg;
+    EGLint numCfg;
+    if (!eglChooseConfig(default_display, cfgAttribs, &cfg, 1, &numCfg) || numCfg < 1) {
+        std::cerr << "number of configs: " << numCfg << " eglChooseConfig failed\n";
+        eglTerminate(default_display);
+        return EXIT_FAILURE;
+    }
+
+    // Create a pbuffer surface sized to the input image
+    const EGLint pbufferAttribs[] = {
+        EGL_WIDTH, desiredWidth,
+        EGL_HEIGHT, desiredHeight,
+        EGL_NONE,
+    };
+
+    EGLSurface pbuf_surface = eglCreatePbufferSurface(default_display, cfg, pbufferAttribs);
+    if (pbuf_surface == EGL_NO_SURFACE) 
+    {
+	    fprintf(stderr, "Failed to create pbuf EGL Surface! Error: %s\n", eglGetErrorStr());
+	//    eglDestroyContext(default_display,context);
+	    eglTerminate(default_display);
+	    gbmClean();
+	    return EXIT_FAILURE;
+    }
 /*
     device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
     if (getDisplay(&display) != 0)
@@ -1001,18 +1051,22 @@ int main(int argc, char **argv)
         gbm_device_destroy(gbmDevice);
         return EXIT_FAILURE;
     }
-
+*/
+	// Create OpenGL ES 3 context
+    const EGLint ctxAttribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE
+    };
     EGLContext context =
-        eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
+        eglCreateContext(default_display, cfg, EGL_NO_CONTEXT, contextAttribs);
     if (context == EGL_NO_CONTEXT)
     {
-        fprintf(stderr, "Failed to create EGL context! Error: %s\n",
-                eglGetErrorStr());
+        fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
         eglTerminate(display);
         gbmClean();
         return EXIT_FAILURE;
     }
-
+/*
     EGLSurface surface =
         eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
     if (surface == EGL_NO_SURFACE)
@@ -1025,58 +1079,10 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 */
-    EGLDisplay default_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (default_display == EGL_NO_DISPLAY) 
-    {
-	    fprintf(stderr, "Failed to get default display! Error: %s\n", eglGetErrorStr());
-	    return EXIT_FAILURE;
-    }
 
-    if (!eglInitialize(default_display, nullptr, nullptr))
-    {
-	    fprintf(stderr, "Failed to initialize default display. Error: %s\n", eglGetErrorStr());
-	    return EXIT_FAILURE;
-    }
-
-	// Choose EGL config that supports OpenGL ES 3
-	const EGLint cfgAttribs[] = {
-        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_DEPTH_SIZE, 0,
-        EGL_STENCIL_SIZE, 0,
-        EGL_NONE
-    };
-    EGLConfig cfg;
-    EGLint numCfg;
-    if (!eglChooseConfig(default_display, cfgAttribs, &cfg, 1, &numCfg) || numCfg < 1) {
-        std::cerr << "number of configs: " << numCfg << " eglChooseConfig failed\n";
-        eglTerminate(default_display);
-        return EXIT_FAILURE;
-    }
-
-    // Create a pbuffer surface sized to the input image
-    const EGLint pbufferAttribs[] = {
-        EGL_WIDTH, desiredWidth,
-        EGL_HEIGHT, desiredHeight,
-        EGL_NONE,
-    };
-
-    EGLSurface pbuf_surface = eglCreatePbufferSurface(default_display, cfg, pbufferAttribs);
-    if (pbuf_surface == EGL_NO_SURFACE) 
-    {
-	    fprintf(stderr, "Failed to create pbuf EGL Surface! Error: %s\n", eglGetErrorStr());
-	    eglDestroyContext(default_display,context);
-	    eglTerminate(default_display);
-	    gbmClean();
-	    return EXIT_FAILURE;
-    }
 
     free(configs);
-    eglMakeCurrent(display, surface, surface, context);
+    eglMakeCurrent(default_display, surface, surface, context);
 
     // Set GL Viewport size, always needed!
     glViewport(0, 0, desiredWidth, desiredHeight);
