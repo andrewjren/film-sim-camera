@@ -1066,14 +1066,14 @@ int main(int argc, char **argv)
     }
 
     // Clear whole screen (front buffer)
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //Color(0.0f, 0.0f, 0.0f, 1.0f);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
     program = glCreateProgram();
-    glUseProgram(program);
+    //glUseProgram(program);
     vert = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vert, 1, &vertexShaderCode, NULL);
     glCompileShader(vert);
@@ -1103,6 +1103,8 @@ int main(int argc, char **argv)
 	unsigned int test_texture;
 	glGenTextures(1, &test_texture); 
 	glBindTexture(GL_TEXTURE_2D, test_texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, test_data);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(test_data);
