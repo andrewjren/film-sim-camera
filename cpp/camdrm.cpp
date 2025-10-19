@@ -1003,7 +1003,7 @@ int main(int argc, char **argv)
     }
 
     EGLContext context =
-        eglCreateContext(display, cfg, EGL_NO_CONTEXT, contextAttribs);
+        eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
     if (context == EGL_NO_CONTEXT)
     {
         fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
