@@ -1131,6 +1131,19 @@ int main(int argc, char **argv)
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
 
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
+
+	// create fbo
+	unsigned int fbo;
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, test_texture, 0);  
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		std::cout << "framebuffer not complete" << std::endl;
+		return 0;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+
     // Setup full screen quad
     float quad[] = {
         -1, -1, 0, 0,
