@@ -1132,7 +1132,7 @@ int main(int argc, char **argv)
 
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
 
-	// create fbo
+	// create fbo bound to image
 	unsigned int fbo;
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
@@ -1143,6 +1143,25 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+
+	// create fbo bound to output 
+	unsigned int dstFBO, dstTex;
+    glGenTextures(1, &dstTex);
+    glBindTexture(GL_TEXTURE_2D, dstTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glGenFramebuffers(1, &dstFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dstTex, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+        std::cerr << "Destination FBO incomplete!\n";
+		return 0;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	
 
     // Setup full screen quad
     float quad[] = {
@@ -1169,6 +1188,8 @@ int main(int argc, char **argv)
     std::cout << "after running gL program: " << glGetError() << std::endl;
 
 	// Bind textures
+	glViewport(0,0,test_width,test_height);
+	glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
