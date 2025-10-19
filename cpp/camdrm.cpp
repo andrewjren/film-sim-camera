@@ -581,7 +581,7 @@ static void requestComplete(libcamera::Request *request)
 	std::cout << std::endl;
 
    	request->reuse(libcamera::Request::ReuseBuffers);
-	camera->queueRequest(request); 
+	// camera->queueRequest(request); NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -752,22 +752,31 @@ static const GLfloat vertices[] = {
 // The following are GLSL shaders for rendering a triangle on the screen
 #define STRINGIFY(x) #x
 static const char *vertexShaderCode = STRINGIFY(
-    attribute vec3 pos; void main() { gl_Position = vec4(pos, 1.0); });
+/*    attribute vec3 pos; void main() { gl_Position = vec4(pos, 1.0); }*/
+in vec2 aPos;
+in vec2 aTexCoord;
+out vec2 TexCoord;
+void main() {
+    TexCoord = aTexCoord;
+    gl_Position = vec4(aPos, 0.0, 1.0);
+}
+);
 
 static const char *fragmentShaderCode =
     STRINGIFY(
 /* Fragment shader for color correction */
 uniform sampler2D image;
 uniform sampler3D clut;
+out vec4 fragColor;
 
 void main()
 {
-     vec4 color;
-         /* reading out a pixel */
-     color = texture2D(image, gl_TexCoord[0].st);
-         /* corecting the color using CLUT */
-     color = texture3D(clut, color.rgb);
-     gl_FragColor = color;
+    vec4 color;
+    /* reading out a pixel */
+    color = texture2D(image, gl_TexCoord[0].st);
+    /* corecting the color using CLUT */
+    color = texture3D(clut, color.rgb);
+    fragColor = color;
 }
 );
 
@@ -1080,7 +1089,7 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
 
-
+	
 	// load test image  
 	int test_width, test_height, test_nrChannels;
 	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
@@ -1110,12 +1119,68 @@ int main(int argc, char **argv)
 	glTexImage3D(EGL_GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(lut_data);
+
+	// Set uniforms
+    glUniform1i(glGetUniformLocation(prog, "image"), 0);
+    glUniform1i(glGetUniformLocation(prog, "clut"), 1);
+
+    // Setup full screen quad
+    float quad[] = {
+        -1, -1, 0, 0,
+         1, -1, 1, 0,
+         1,  1, 1, 1,
+        -1,  1, 0, 1
+    };
+
+	// run GL program?
+	GLuint vao,vbo;
+    glGenVertexArrays(1,&vao);
+    glBindVertexArray(vao);
+    glGenBuffers(1,&vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STATIC_DRAW);
+    GLint posLoc = glGetAttribLocation(prog,"aPos");
+    GLint uvLoc = glGetAttribLocation(prog,"aTexCoord");
+    glVertexAttribPointer(posLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)0);
+    glEnableVertexAttribArray(posLoc);
+    glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
+    glEnableVertexAttribArray(uvLoc);
+
+	// Bind textures
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, test_texture);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+
+	// Draw
+    glViewport(0,0,test_width,test_height);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	// Read pixels
+    std::vector<unsigned char> pixels(test_width * test_height * 4);
+    glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+	// Save to PNG
+    stbi_write_png("output.png", test_width, test_height, 4, flipped.data(), test_width * 4);
+    std::cout << "Saved color-corrected image to output.png\n";
+
 	/* draw some colors for 5seconds */
 	camera->start();
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
 	
-	std::this_thread::sleep_for(std::chrono::seconds(10));
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+
+	// assume that there's a new image in frame (this is bad )
+	/*struct modeset_dev *iter;
+
+	for (iter = modeset_list; iter; iter = iter->next) {
+	    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, )
+		iter->map[0];
+		memcpy(&iter->map[0],addr,plane.length);
+
+	}*/
 
 	/* cleanup everything */
 	modeset_cleanup(fd);
