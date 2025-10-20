@@ -582,7 +582,7 @@ static void requestComplete(libcamera::Request *request)
 	std::cout << std::endl;
 
    	request->reuse(libcamera::Request::ReuseBuffers);
-	// camera->queueRequest(request); NOTE: uncomment to make request happen each time 
+	camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -759,7 +759,8 @@ out vec4 fragColor;
 void main()
 {
     vec4 color;
-    color = texture2D(image, TexCoord);
+    color = texture(image, TexCoord);
+    color = texture(clut, color.rgb);
     fragColor = color;
 }
 )";
@@ -779,6 +780,70 @@ static const EGLint configAttribs[] = {
 static const EGLint contextAttribs[] = {
     EGL_CONTEXT_CLIENT_VERSION, 2,
     EGL_NONE};
+
+
+unsigned char* lut_data_format(unsigned char* data, int w, int channels)
+{
+		// level^3 = number of squares per dimension -> width (w) should be level^3
+    // but Hald format: image is square with side = level^2 * level = level^3? Actually Hald encoding:
+    // image size = level^2 * level = level^3? The typical mapping is: image dimension = level * level
+    // Historically: image_size = level^3, and image dimension (width) = level * level
+    // So width == height == level * level
+    //
+    // Calculate level from width: level = round(cbrt(width))
+    // But in previous code we used: cube_size = level * level; image_size = level^3
+    // Here compute level from sqrt of width if needed, but safer: compute 'level' by nearest integer cube root of w
+    // We'll compute level such that cube = level*level and image width = cube.
+    //
+    // Find level where cube == w
+    int cube = w; // w == cube (cube = level * level)
+    double level_d = std::sqrt((double)cube);
+    int level = (int)std::round(level_d);
+    if (level < 1) level = 1;
+    // Now actual 3D size (one dimension) = cube (level*level)
+    // The 3D texture dimension will be cube x cube x cube
+    int dim = cube; // number of samples per axis in 3D texture
+    // But previous implementations treated 3D texture size = cube (level*level)
+    // so we'll match that: size = cube
+    //
+    int channels_clamped = channels >= 3 ? 3 : channels;
+
+    // Build texels: each voxel holds RGB (unsigned byte)
+    size_t voxelCount = (size_t)dim * dim * dim;
+    std::vector<unsigned char> texels(voxelCount * 3);
+    // Iterate over z (blue), y (green), x (red) in the 3D cube coordinates [0..dim-1]
+    // Map from 3D position to 2D hald image coordinates:
+    // hald image is arranged as tiles: depth (z) tiles laid out in square of size 'level' by 'level',
+    // within each tile there's a grid of size 'level' x 'level'? Implementation pattern below replicates earlier approach.
+    // We'll follow the mapping used in earlier examples: treat cube = level*level and map:
+    // for z in [0..cube-1]:
+    //   zy = z / level
+    //   zz = z % level
+    //   for y in [0..cube-1]:
+    //     for x in [0..cube-1]:
+    //       srcX = x + zz * cube
+    //       srcY = y + zy * cube
+    //
+    // This matches the earlier mapping used by the user.
+
+    for (int z = 0; z < dim; ++z) {
+        int zy = z / level;
+        int zz = z % level;
+        for (int y = 0; y < dim; ++y) {
+            for (int x = 0; x < dim; ++x) {
+                int srcX = x + zz * dim;
+                int srcY = y + zy * dim;
+                int srcIdx = (srcY * w + srcX) * channels;
+                size_t dstIdx = ((size_t)z * dim * dim + (size_t)y * dim + (size_t)x) * 3;
+                // copy RGB
+                texels[dstIdx + 0] = data[srcIdx + 0];
+                texels[dstIdx + 1] = data[srcIdx + 1];
+                texels[dstIdx + 2] = data[srcIdx + 2];
+            }
+        }
+    }
+    return texels.data();
+}
 
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
@@ -1121,7 +1186,9 @@ int main(int argc, char **argv)
 	unsigned int lut_texture;
 	glGenTextures(1, &lut_texture); 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, lut_width, lut_height, lut_depth, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(lut_data);
 
@@ -1148,7 +1215,7 @@ int main(int argc, char **argv)
 	unsigned int dstFBO, dstTex;
     glGenTextures(1, &dstTex);
     glBindTexture(GL_TEXTURE_2D, dstTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -1210,12 +1277,11 @@ int main(int argc, char **argv)
     stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
     std::cout << "Saved color-corrected image to output.png\n";
 
-	/* draw some colors for 5seconds */
 	camera->start();
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
 	
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::this_thread::sleep_for(std::chrono::seconds(5));
 
 	// assume that there's a new image in frame (this is bad )
 	/*struct modeset_dev *iter;
@@ -1240,9 +1306,7 @@ int main(int argc, char **argv)
 
 	ret = 0;
 
-out_close:
 	close(fd);
-out_return:
 	if (ret) {
 		errno = -ret;
 		fprintf(stderr, "modeset failed with error %d: %m\n", errno);
