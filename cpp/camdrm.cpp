@@ -77,6 +77,8 @@ static uint32_t previousFb;
 int test_width, test_height, test_nrChannels;
 unsigned int dstFBO, dstTex;
 unsigned int lut_texture;
+unsigned int test_texture;
+unsigned int fbo;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -577,16 +579,23 @@ static void requestComplete(libcamera::Request *request)
 	    }
 	    for (iter = modeset_list; iter; iter = iter->next) {
 	    	//int rtn = read(plane.fd.get(),&iter->map,plane.length);
+			//glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    			glViewport(0, 0, test_width, test_height); // Set viewport to match texture size
+    			//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear buffers
+			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			// Load recent image as texture 
-			glViewport(0,0,test_width,test_height);
-			glActiveTexture(GL_TEXTURE0);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, addr);
+			//glViewport(0,0,480,640);
+			//glActiveTexture(GL_TEXTURE0);
+			std::vector<unsigned char> raw_data(test_width*test_height*4);
+			memcpy(raw_data.data(),addr,plane.length);
 			glBindTexture(GL_TEXTURE_2D, test_texture);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
 
 			// Bind textures
 			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_3D, lut_texture);
+			//glActiveTexture(GL_TEXTURE1);
+			//glBindTexture(GL_TEXTURE_3D, lut_texture);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			//std::cout << "after binding textures: " << glGetError() << std::endl;
 
 			// Draw
@@ -596,11 +605,12 @@ static void requestComplete(libcamera::Request *request)
 			//std::cout << "after drawing: " << glGetError() << std::endl;
 
 			// Read pixels
-			std::vector<unsigned char> pixels(test_width * test_height * 4);
-			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+			std::vector<unsigned char> pixels(480*640* 4);
+			glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-
+			std::cout << " | buffer size: " << sizeof(addr) << std::endl;
 			memcpy(&iter->map[0],pixels.data(),pixels.size());
+			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << rtn << std::endl;
 
 	    }
@@ -1131,7 +1141,7 @@ int main(int argc, char **argv)
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
-	unsigned int test_texture;
+	//unsigned int test_texture;
 	glGenTextures(1, &test_texture); 
 	glBindTexture(GL_TEXTURE_2D, test_texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1165,7 +1175,7 @@ int main(int argc, char **argv)
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
 
 	// create fbo bound to image
-	unsigned int fbo;
+	//unsigned int fbo;
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, test_texture, 0);  
