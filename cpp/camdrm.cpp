@@ -73,6 +73,11 @@ struct gbm_surface *gbmSurface;
 static struct gbm_bo *previousBo = NULL;
 static uint32_t previousFb;
 
+// added to make render loop easier
+int test_width, test_height, test_nrChannels;
+unsigned int dstFBO, dstTex;
+unsigned int lut_texture;
+
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
  * correct device driver (located in kernel-tree at ./drivers/gpu/drm/<xy>) and
@@ -572,9 +577,31 @@ static void requestComplete(libcamera::Request *request)
 	    }
 	    for (iter = modeset_list; iter; iter = iter->next) {
 	    	//int rtn = read(plane.fd.get(),&iter->map,plane.length);
-		//
-		memcpy(&iter->map[0],addr,plane.length);
-		//std::cout << rtn << std::endl;
+			// Load recent image as texture 
+			glViewport(0,0,test_width,test_height);
+			glActiveTexture(GL_TEXTURE0);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, addr);
+			glBindTexture(GL_TEXTURE_2D, test_texture);
+
+			// Bind textures
+			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_3D, lut_texture);
+			//std::cout << "after binding textures: " << glGetError() << std::endl;
+
+			// Draw
+			glViewport(0,0,test_width,test_height);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+			//std::cout << "after drawing: " << glGetError() << std::endl;
+
+			// Read pixels
+			std::vector<unsigned char> pixels(test_width * test_height * 4);
+			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+
+			memcpy(&iter->map[0],pixels.data(),pixels.size());
+			//std::cout << rtn << std::endl;
 
 	    }
 	    //munmap(addr, plane.length);
@@ -782,68 +809,6 @@ static const EGLint contextAttribs[] = {
     EGL_NONE};
 
 
-unsigned char* lut_data_format(unsigned char* data, int w, int channels)
-{
-		// level^3 = number of squares per dimension -> width (w) should be level^3
-    // but Hald format: image is square with side = level^2 * level = level^3? Actually Hald encoding:
-    // image size = level^2 * level = level^3? The typical mapping is: image dimension = level * level
-    // Historically: image_size = level^3, and image dimension (width) = level * level
-    // So width == height == level * level
-    //
-    // Calculate level from width: level = round(cbrt(width))
-    // But in previous code we used: cube_size = level * level; image_size = level^3
-    // Here compute level from sqrt of width if needed, but safer: compute 'level' by nearest integer cube root of w
-    // We'll compute level such that cube = level*level and image width = cube.
-    //
-    // Find level where cube == w
-    int cube = w; // w == cube (cube = level * level)
-    double level_d = std::sqrt((double)cube);
-    int level = (int)std::round(level_d);
-    if (level < 1) level = 1;
-    // Now actual 3D size (one dimension) = cube (level*level)
-    // The 3D texture dimension will be cube x cube x cube
-    int dim = cube; // number of samples per axis in 3D texture
-    // But previous implementations treated 3D texture size = cube (level*level)
-    // so we'll match that: size = cube
-    //
-    int channels_clamped = channels >= 3 ? 3 : channels;
-
-    // Build texels: each voxel holds RGB (unsigned byte)
-    size_t voxelCount = (size_t)dim * dim * dim;
-    std::vector<unsigned char> texels(voxelCount * 3);
-    // Iterate over z (blue), y (green), x (red) in the 3D cube coordinates [0..dim-1]
-    // Map from 3D position to 2D hald image coordinates:
-    // hald image is arranged as tiles: depth (z) tiles laid out in square of size 'level' by 'level',
-    // within each tile there's a grid of size 'level' x 'level'? Implementation pattern below replicates earlier approach.
-    // We'll follow the mapping used in earlier examples: treat cube = level*level and map:
-    // for z in [0..cube-1]:
-    //   zy = z / level
-    //   zz = z % level
-    //   for y in [0..cube-1]:
-    //     for x in [0..cube-1]:
-    //       srcX = x + zz * cube
-    //       srcY = y + zy * cube
-    //
-    // This matches the earlier mapping used by the user.
-
-    for (int z = 0; z < dim; ++z) {
-        int zy = z / level;
-        int zz = z % level;
-        for (int y = 0; y < dim; ++y) {
-            for (int x = 0; x < dim; ++x) {
-                int srcX = x + zz * dim;
-                int srcY = y + zy * dim;
-                int srcIdx = (srcY * w + srcX) * channels;
-                size_t dstIdx = ((size_t)z * dim * dim + (size_t)y * dim + (size_t)x) * 3;
-                // copy RGB
-                texels[dstIdx + 0] = data[srcIdx + 0];
-                texels[dstIdx + 1] = data[srcIdx + 1];
-                texels[dstIdx + 2] = data[srcIdx + 2];
-            }
-        }
-    }
-    return texels.data();
-}
 
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
@@ -1159,7 +1124,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	// load test image  
-	int test_width, test_height, test_nrChannels;
+	//int test_width, test_height, test_nrChannels;
 	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
 	if (!test_data)
 	{
@@ -1183,7 +1148,7 @@ int main(int argc, char **argv)
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
-	unsigned int lut_texture;
+	//unsigned int lut_texture;
 	glGenTextures(1, &lut_texture); 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
@@ -1212,7 +1177,7 @@ int main(int argc, char **argv)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); 
 
 	// create fbo bound to output 
-	unsigned int dstFBO, dstTex;
+	//unsigned int dstFBO, dstTex;
     glGenTextures(1, &dstTex);
     glBindTexture(GL_TEXTURE_2D, dstTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
