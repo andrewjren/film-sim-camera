@@ -580,22 +580,22 @@ static void requestComplete(libcamera::Request *request)
 	    for (iter = modeset_list; iter; iter = iter->next) {
 	    	//int rtn = read(plane.fd.get(),&iter->map,plane.length);
 			//glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    			glViewport(0, 0, test_width, test_height); // Set viewport to match texture size
-    			//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear buffers
+    		//glViewport(0, 0, test_width, test_height); // Set viewport to match texture size
+    		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear buffers
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			// Load recent image as texture 
 			//glViewport(0,0,480,640);
 			//glActiveTexture(GL_TEXTURE0);
 			std::vector<unsigned char> raw_data(test_width*test_height*4);
 			memcpy(raw_data.data(),addr,plane.length);
-			glBindTexture(GL_TEXTURE_2D, test_texture);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
+			//glBindTexture(GL_TEXTURE_2D, test_texture);
+			//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
 
 			// Bind textures
-			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			//glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
 			//glActiveTexture(GL_TEXTURE1);
 			//glBindTexture(GL_TEXTURE_3D, lut_texture);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			//std::cout << "after binding textures: " << glGetError() << std::endl;
 
 			// Draw
