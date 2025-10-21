@@ -79,6 +79,15 @@ unsigned int dstFBO, dstTex;
 unsigned int lut_texture;
 unsigned int test_texture;
 unsigned int fbo;
+GLuint vao,vbo;
+
+// Setup full screen quad
+float quad[] = {
+	-1, -1, 0, 0,
+		1, -1, 1, 0,
+		1,  1, 1, 1,
+	-1,  1, 0, 1
+};
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -592,7 +601,7 @@ static void requestComplete(libcamera::Request *request)
 			//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
 
 			// Bind textures
-			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			//glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
 			//glActiveTexture(GL_TEXTURE1);
 			//glBindTexture(GL_TEXTURE_3D, lut_texture);
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -600,9 +609,37 @@ static void requestComplete(libcamera::Request *request)
 
 			// Draw
 			//glViewport(0,0,test_width,test_height);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+			//glClear(GL_COLOR_BUFFER_BIT);
+			//glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 			//std::cout << "after drawing: " << glGetError() << std::endl;
+
+
+	// run GL program?
+	glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+	glEnable(GL_DEPTH_TEST);
+	// make sure we clear the framebuffer's content
+	glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STATIC_DRAW);
+
+	// Bind textures
+	//glViewport(0,0,test_width,test_height);
+	glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, test_texture);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
+    //glActiveTexture(GL_TEXTURE1);
+    //glBindTexture(GL_TEXTURE_3D, lut_texture);
+    //std::cout << "after binding textures: " << glGetError() << std::endl;
+
+	// Draw
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDisable(GL_DEPTH_TEST);
+    //glViewport(0,0,test_width,test_height);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    //std::cout << "after drawing: " << glGetError() << std::endl;
 
 			// Read pixels
 			std::vector<unsigned char> pixels(480*640* 4);
@@ -1210,12 +1247,13 @@ int main(int argc, char **argv)
 	
 
     // Setup full screen quad
+	/*
     float quad[] = {
         -1, -1, 0, 0,
          1, -1, 1, 0,
          1,  1, 1, 1,
         -1,  1, 0, 1
-    };
+    };*/
 
 	// run GL program?
 	GLuint vao,vbo;
