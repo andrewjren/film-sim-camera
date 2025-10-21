@@ -610,6 +610,10 @@ static void requestComplete(libcamera::Request *request)
 
 			std::cout << " | buffer size: " << sizeof(addr) << std::endl;
 			memcpy(&iter->map[0],pixels.data(),pixels.size());
+
+			// debug, try to write to png first 
+			stbi_write_png("debug.png", 480, 640, 4, pixels.data(), 480 * 4);
+			std::cout << "Debug saved image to debug.png\n";
 			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << rtn << std::endl;
 
