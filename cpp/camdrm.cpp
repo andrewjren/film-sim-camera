@@ -587,6 +587,7 @@ static void requestComplete(libcamera::Request *request)
 	    	    std::cout << "Map Failed" << std::endl;
 	    }
 	    for (iter = modeset_list; iter; iter = iter->next) {
+		    std::cout << "plane length: " << plane.length << std::endl;
 	    	//int rtn = read(plane.fd.get(),&iter->map,plane.length);
 			//glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     		//glViewport(0, 0, test_width, test_height); // Set viewport to match texture size
@@ -645,13 +646,13 @@ static void requestComplete(libcamera::Request *request)
 			std::vector<unsigned char> pixels(480*640* 4);
 			glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-			std::cout << " | buffer size: " << sizeof(addr) << std::endl;
-			memcpy(&iter->map[0],pixels.data(),pixels.size());
+			//memcpy(&iter->map[0],pixels.data(),pixels.size());
 
 			// debug, try to write to png first 
-			stbi_write_png("debug.png", 480, 640, 4, pixels.data(), 480 * 4);
-			std::cout << "Debug saved image to debug.png\n";
-			//memcpy(&iter->map[0],addr,plane.length);
+			//stbi_write_png("debug.png", 480, 640, 4, pixels.data((), 480 * 4);
+			//stbi_write_png("debug.png", test_width, test_height, 4, raw_data.data(), test_width*4);
+			//std::cout << "Debug saved image to debug.png\n";
+			memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << rtn << std::endl;
 
 	    }
