@@ -592,14 +592,14 @@ static void requestComplete(libcamera::Request *request)
 			//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, raw_data.data());
 
 			// Bind textures
-			//glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
 			//glActiveTexture(GL_TEXTURE1);
 			//glBindTexture(GL_TEXTURE_3D, lut_texture);
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			//std::cout << "after binding textures: " << glGetError() << std::endl;
 
 			// Draw
-			glViewport(0,0,test_width,test_height);
+			//glViewport(0,0,test_width,test_height);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 			//std::cout << "after drawing: " << glGetError() << std::endl;
