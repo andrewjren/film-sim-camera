@@ -78,8 +78,10 @@ int test_width, test_height, test_nrChannels;
 unsigned int dstFBO, dstTex;
 unsigned int lut_texture;
 unsigned int test_texture;
-unsigned int fbo;
+unsigned int input_pbo;
+unsigned int output_pbo;
 GLuint vao,vbo;
+GLuint program, vert, frag;
 
 // Setup full screen quad
 float quad[] = {
@@ -589,15 +591,41 @@ static void requestComplete(libcamera::Request *request)
 	    for (iter = modeset_list; iter; iter = iter->next) {
 
 		    // Provide buffer to write to
-		    glBindBuffer(GL_FRAMEBUFFER, fbo);
+		    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
 		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-		 
-		    std::cout << "buffer mapped: " << ptr << std::endl;
-		    memcpy(ptr, addr, plane.length);
-		    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-			// Read pixels
-			//std::vector<unsigned char> pixels(test_width*test_height* 4);
-			//glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		 	if (ptr) {
+				memcpy(ptr, addr, plane.length);
+		    	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+				std::cout << "input pbo mapped: " << ptr << std::endl;
+			}
+			else {
+				std::cout << "input pbo failed" << std::endl;
+			}
+
+			// Transfer to texture
+			glBindTexture(GL_TEXTURE_2D, texture);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+			// Render to Framebuffer
+			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+		    glUseProgram(program);
+			glBindVertexArray(vao);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+			// Read Framebuffer
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+			glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imageSize, GL_MAP_READ_BIT);
+
+			// Get data out of buffer
+			std::vector<unsigned char> pixels(test_width*test_height* 4);
+			memcpy(pixels.data(), ptr, imageSize);
+		    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+
+			stbi_write_png("debug.png", test_width, test_height, 4, pixels.data(), test_width*4); // just make sure camera is actually reading things 
 
 			//memcpy(&iter->map[0],pixels.data(),pixels.size());
 
@@ -607,7 +635,6 @@ static void requestComplete(libcamera::Request *request)
 			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << "copied" << std::endl;
 			//std::cout << rtn << std::endl;
-		std::cout << "requestComplete" << std::endl;
 
 	    }
 	    //munmap(addr, plane.length);
@@ -983,7 +1010,7 @@ int main(int argc, char **argv)
 
     /* OpenGL stuff */ 
     int major, minor;
-    GLuint program, vert, frag;
+    //GLuint program, vert, frag;
     GLint colorLoc, result;
 
     device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
@@ -1104,12 +1131,6 @@ int main(int argc, char **argv)
     std::cout << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
-    // Create Vertex Buffer Object
-    // Again, NO ERRRO CHECKING IS DONE! (for the purpose of this example)
-    //glGenBuffers(1, &vbo);
-    //glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    //glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vertices, GL_STATIC_DRAW);
-
 	
     std::cout << "after using program: " << glGetError() << std::endl;
     GLint isCompiled = 0;
@@ -1129,28 +1150,43 @@ int main(int argc, char **argv)
 		glDeleteShader(frag); // Don't leak the shader.
 		return 0;
 	}
+
+	
 	// load test image  
 	//int test_width, test_height, test_nrChannels;
+	/*
 	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
 	if (!test_data)
 	{
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
+	stbi_image_free(test_data);
+	*/
 
+	size_t image_size = test_width * test_height * 4; // RGBA
 
-	//unsigned int test_texture;
-	glGenBuffers(1, &fbo);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, fbo);
+	// setup texture for input images (from camera)
 	glGenTextures(1, &test_texture); 
 	glBindTexture(GL_TEXTURE_2D, test_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, test_data);
-	//glGenerateMipmap(GL_TEXTURE_2D);
-	stbi_image_free(test_data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
-	// load lut texture 
+	// setup pbo for input images (from camera)
+	glGenBuffers(1, &input_pbo);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, imageSize, nullptr, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
+
+	// setup pbo for output image (to screen)
+	glGenBuffers(1, &output_pbo);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+	glBufferData(GL_PIXEL_PACK_BUFFER, imageSize, nullptr, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
+	// load lut image 
 	int lut_width, lut_height, lut_depth, lut_nrChannels;
 	unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
 	if (!lut_data)
@@ -1158,14 +1194,25 @@ int main(int argc, char **argv)
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
-	//unsigned int lut_texture;
+
+	size_t lut_size = 144 * 144 * 144 * 4; // 3D RGBA
+	// setup lut texture
 	glGenTextures(1, &lut_texture); 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, lut_data);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//glGenerateMipmap(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_3D, 0);
 	stbi_image_free(lut_data);
+
+	// setup pbo for lut 
+	glGenBuffers(1, &lut_pbo);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, lut_data, GL_STREAM_DRAW);
+	glBindTexture(GL_TEXTURE_3D, lut_texture);
+	glSubTexImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glBindTexture(GL_TEXTURE_3D, 0);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     std::cout << "before setting uniforms: " << glGetError() << std::endl;
 	// Set uniforms
@@ -1174,21 +1221,9 @@ int main(int argc, char **argv)
 
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
 
-	// create fbo bound to image
-	//unsigned int fbo;
-	//glGenFramebuffers(1, &fbo);
-	//glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
-	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, test_texture, 0);  
-	//if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-	//{
-	//	std::cout << "framebuffer not complete" << std::endl;
-	//	return 0;
-	//}
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0); 
-
 	// create fbo bound to output 
 	//unsigned int dstFBO, dstTex;
-    gl
+    
     glGenTextures(1, &dstTex);
     glBindTexture(GL_TEXTURE_2D, dstTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -1205,15 +1240,6 @@ int main(int argc, char **argv)
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	
-
-    // Setup full screen quad
-	/*
-    float quad[] = {
-        -1, -1, 0, 0,
-         1, -1, 1, 0,
-         1,  1, 1, 1,
-        -1,  1, 0, 1
-    };*/
 
 	// run GL program?
 	GLuint vao,vbo;
@@ -1260,16 +1286,6 @@ int main(int argc, char **argv)
 	   camera->queueRequest(request.get());
 	
 	std::this_thread::sleep_for(std::chrono::seconds(5));
-
-	// assume that there's a new image in frame (this is bad )
-	/*struct modeset_dev *iter;
-
-	for (iter = modeset_list; iter; iter = iter->next) {
-	    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, )
-		iter->map[0];
-		memcpy(&iter->map[0],addr,plane.length);
-
-	}*/
 
 	/* cleanup everything */
 	modeset_cleanup(fd);
