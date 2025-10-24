@@ -588,19 +588,26 @@ static void requestComplete(libcamera::Request *request)
 	    }
 	    for (iter = modeset_list; iter; iter = iter->next) {
 
+		    // Provide buffer to write to
+		    glBindBuffer(GL_FRAMEBUFFER, fbo);
+		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+		 
+		    std::cout << "buffer mapped: " << ptr << std::endl;
+		    memcpy(ptr, addr, plane.length);
+		    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			// Read pixels
-			std::vector<unsigned char> pixels(test_width*test_height* 4);
-			//glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+			//std::vector<unsigned char> pixels(test_width*test_height* 4);
+			//glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
 			//memcpy(&iter->map[0],pixels.data(),pixels.size());
 
 			// debug, try to write to png first 
-			//stbi_write_png("debug.png", 480, 640, 4, pixels.data((), 480 * 4);
-			stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
+			//stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
 			//std::cout << "Debug saved image to debug.png\n";
-			memcpy(&iter->map[0],addr,plane.length);
+			//memcpy(&iter->map[0],addr,plane.length);
+			//std::cout << "copied" << std::endl;
 			//std::cout << rtn << std::endl;
+		std::cout << "requestComplete" << std::endl;
 
 	    }
 	    //munmap(addr, plane.length);
@@ -879,8 +886,8 @@ int main(int argc, char **argv)
 	std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
 	libcamera::StreamConfiguration &streamConfig = config->at(0);
 	std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	streamConfig.size.width = 480;
-	streamConfig.size.height = 640;
+	streamConfig.size.width = 2592;
+	streamConfig.size.height = 1944;
 	config->validate();
 	std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
 	camera->configure(config.get());
@@ -1130,11 +1137,15 @@ int main(int argc, char **argv)
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
+
+
 	//unsigned int test_texture;
+	glGenBuffers(1, &fbo);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, fbo);
 	glGenTextures(1, &test_texture); 
 	glBindTexture(GL_TEXTURE_2D, test_texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, test_data);
 	//glGenerateMipmap(GL_TEXTURE_2D);
 	stbi_image_free(test_data);
@@ -1165,18 +1176,19 @@ int main(int argc, char **argv)
 
 	// create fbo bound to image
 	//unsigned int fbo;
-	glGenFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, test_texture, 0);  
-	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-	{
-		std::cout << "framebuffer not complete" << std::endl;
-		return 0;
-	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+	//glGenFramebuffers(1, &fbo);
+	//glBindFramebuffer(GL_FRAMEBUFFER, fbo); 
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, test_texture, 0);  
+	//if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	//{
+	//	std::cout << "framebuffer not complete" << std::endl;
+	//	return 0;
+	//}
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0); 
 
 	// create fbo bound to output 
 	//unsigned int dstFBO, dstTex;
+    gl
     glGenTextures(1, &dstTex);
     glBindTexture(GL_TEXTURE_2D, dstTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -1219,6 +1231,7 @@ int main(int argc, char **argv)
 
     std::cout << "after running gL program: " << glGetError() << std::endl;
 
+    /*
 	// Bind textures
 	glViewport(0,0,test_width,test_height);
 	glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -1241,7 +1254,7 @@ int main(int argc, char **argv)
 	// Save to PNG
     stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
     std::cout << "Saved color-corrected image to output.png\n";
-
+*/
 	camera->start();
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
