@@ -597,7 +597,7 @@ static void requestComplete(libcamera::Request *request)
 
 			// debug, try to write to png first 
 			//stbi_write_png("debug.png", 480, 640, 4, pixels.data((), 480 * 4);
-			stbi_write_png("debug.png", test_width, test_height, 4, raw_data.data(), test_width*4);
+			stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
 			//std::cout << "Debug saved image to debug.png\n";
 			memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << rtn << std::endl;
