@@ -59,11 +59,9 @@
 static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
-static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
-			     struct modeset_dev *dev);
+static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn, struct modeset_dev *dev);
 static int modeset_create_fb(int fd, struct modeset_dev *dev);
-static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
-			     struct modeset_dev *dev);
+static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn, struct modeset_dev *dev);
 static int modeset_open(int *out, const char *node);
 static int modeset_prepare(int fd);
 static void modeset_cleanup(int fd);
@@ -94,10 +92,10 @@ static EGLContext context;
 
 // Setup full screen quad
 float quad[] = {
-	-1, -1, 0, 0,
-		1, -1, 1, 0,
-		1,  1, 1, 1,
-	-1,  1, 0, 1
+  -1, -1, 0, 0,
+  1, -1, 1, 0,
+  1,  1, 1, 1,
+  -1,  1, 0, 1
 };
 struct FrameData {
     void* data;
@@ -110,17 +108,17 @@ struct FrameData {
 class FrameManager {
 private:
     //std::queue<FrameData> queue;
-	std::pair<bool, std::unique_ptr<FrameData>> frame_data; // <data available, pointer to data>
+    std::pair<bool, std::unique_ptr<FrameData>> frame_data; // <data available, pointer to data>
     std::mutex mutex;
     std::condition_variable cv;
 
 public:
     void update(FrameData* frame_ptr, size_t len) {
         std::lock_guard<std::mutex> lock(mutex);
-		frame.second.reset();
-		memcpy(frame.second->data, frame_ptr, len);
-		frame.second->size = len;
-		frame_data.first = true; // 
+        frame.second.reset();
+        memcpy(frame.second->data, frame_ptr, len);
+        frame.second->size = len;
+        frame_data.first = true; // 
         //queue.push(frame);
         //cv.notify_one();
     }
@@ -142,14 +140,14 @@ public:
     }*/
 
    bool data_available() {
-	   std::unique_lock<std::mutex> lock(mutex);
-	   return frame_data.first;
+       std::unique_lock<std::mutex> lock(mutex);
+       return frame_data.first;
    }
 
    void swap_buffers(std::unique_ptr<FrameData> ptr_in) {
-	   std::lock_guard<std::mutex> lock(mutex);
-	   frame_data.first = false; // processed this data
-	   frame_data.second.swap(ptr_in);
+       std::lock_guard<std::mutex> lock(mutex);
+       frame_data.first = false; // processed this data
+       frame_data.second.swap(ptr_in);
    }
 };
 
@@ -183,26 +181,26 @@ FrameManager frame_manager;
 
 static int modeset_open(int *out, const char *node)
 {
-	int fd, ret;
-	uint64_t has_dumb;
+    int fd, ret;
+    uint64_t has_dumb;
 
-	fd = open(node, O_RDWR | O_CLOEXEC);
-	if (fd < 0) {
-		ret = -errno;
-		fprintf(stderr, "cannot open '%s': %m\n", node);
-		return ret;
-	}
+    fd = open(node, O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        ret = -errno;
+        fprintf(stderr, "cannot open '%s': %m\n", node);
+        return ret;
+    }
 
-	if (drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb) < 0 ||
-	    !has_dumb) {
-		fprintf(stderr, "drm device '%s' does not support dumb buffers\n",
-			node);
-		close(fd);
-		return -EOPNOTSUPP;
-	}
+    if (drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb) < 0 ||
+        !has_dumb) {
+        fprintf(stderr, "drm device '%s' does not support dumb buffers\n",
+            node);
+        close(fd);
+        return -EOPNOTSUPP;
+    }
 
-	*out = fd;
-	return 0;
+    *out = fd;
+    return 0;
 }
 
 /*
@@ -251,20 +249,20 @@ static int modeset_open(int *out, const char *node)
  */
 
 struct modeset_dev {
-	struct modeset_dev *next;
+    struct modeset_dev *next;
 
-	uint32_t width;
-	uint32_t height;
-	uint32_t stride;
-	uint32_t size;
-	uint32_t handle;
-	uint8_t *map;
+    uint32_t width;
+    uint32_t height;
+    uint32_t stride;
+    uint32_t size;
+    uint32_t handle;
+    uint8_t *map;
 
-	drmModeModeInfo mode;
-	uint32_t fb;
-	uint32_t conn;
-	uint32_t crtc;
-	drmModeCrtc *saved_crtc;
+    drmModeModeInfo mode;
+    uint32_t fb;
+    uint32_t conn;
+    uint32_t crtc;
+    drmModeCrtc *saved_crtc;
 };
 
 static struct modeset_dev *modeset_list = NULL;
@@ -290,57 +288,55 @@ static struct modeset_dev *modeset_list = NULL;
 
 static int modeset_prepare(int fd)
 {
-	drmModeRes *res;
-	drmModeConnector *conn;
-	unsigned int i;
-	struct modeset_dev *dev;
-	int ret;
+    drmModeRes *res;
+    drmModeConnector *conn;
+    unsigned int i;
+    struct modeset_dev *dev;
+    int ret;
 
-	/* retrieve resources */
-	res = drmModeGetResources(fd);
-	if (!res) {
-		fprintf(stderr, "cannot retrieve DRM resources (%d): %m\n",
-			errno);
-		return -errno;
-	}
+    /* retrieve resources */
+    res = drmModeGetResources(fd);
+    if (!res) {
+        fprintf(stderr, "cannot retrieve DRM resources (%d): %m\n",
+            errno);
+        return -errno;
+    }
 
-	/* iterate all connectors */
-	for (i = 0; i < res->count_connectors; ++i) {
-		/* get information for each connector */
-		conn = drmModeGetConnector(fd, res->connectors[i]);
-		if (!conn) {
-			fprintf(stderr, "cannot retrieve DRM connector %u:%u (%d): %m\n",
-				i, res->connectors[i], errno);
-			continue;
-		}
+    /* iterate all connectors */
+    for (i = 0; i < res->count_connectors; ++i) {
+        /* get information for each connector */
+        conn = drmModeGetConnector(fd, res->connectors[i]);
+        if (!conn) {
+            fprintf(stderr, "cannot retrieve DRM connector %u:%u (%d): %m\n", i, res->connectors[i], errno);
+            continue;
+        }
 
-		/* create a device structure */
-		dev = static_cast<modeset_dev*>(malloc(sizeof(*dev)));
-		memset(dev, 0, sizeof(*dev));
-		dev->conn = conn->connector_id;
+        /* create a device structure */
+        dev = static_cast<modeset_dev*>(malloc(sizeof(*dev)));
+        memset(dev, 0, sizeof(*dev));
+        dev->conn = conn->connector_id;
 
-		/* call helper function to prepare this connector */
-		ret = modeset_setup_dev(fd, res, conn, dev);
-		if (ret) {
-			if (ret != -ENOENT) {
-				errno = -ret;
-				fprintf(stderr, "cannot setup device for connector %u:%u (%d): %m\n",
-					i, res->connectors[i], errno);
-			}
-			free(dev);
-			drmModeFreeConnector(conn);
-			continue;
-		}
+        /* call helper function to prepare this connector */
+        ret = modeset_setup_dev(fd, res, conn, dev);
+        if (ret) {
+            if (ret != -ENOENT) {
+                errno = -ret;
+                fprintf(stderr, "cannot setup device for connector %u:%u (%d): %m\n", i, res->connectors[i], errno);
+            }
+            free(dev);
+            drmModeFreeConnector(conn);
+            continue;
+        }
 
-		/* free connector data and link device into global list */
-		drmModeFreeConnector(conn);
-		dev->next = modeset_list;
-		modeset_list = dev;
-	}
+        /* free connector data and link device into global list */
+        drmModeFreeConnector(conn);
+        dev->next = modeset_list;
+        modeset_list = dev;
+    }
 
-	/* free resources again */
-	drmModeFreeResources(res);
-	return 0;
+    /* free resources again */
+    drmModeFreeResources(res);
+    return 0;
 }
 
 /*
@@ -372,49 +368,43 @@ static int modeset_prepare(int fd)
  *     framebuffer onto the monitor.
  */
 
-static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
-			     struct modeset_dev *dev)
+static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn, struct modeset_dev *dev)
 {
-	int ret;
+    int ret;
 
-	/* check if a monitor is connected */
-	if (conn->connection != DRM_MODE_CONNECTED) {
-		fprintf(stderr, "ignoring unused connector %u\n",
-			conn->connector_id);
-		return -ENOENT;
-	}
+    /* check if a monitor is connected */
+    if (conn->connection != DRM_MODE_CONNECTED) {
+        fprintf(stderr, "ignoring unused connector %u\n", conn->connector_id);
+        return -ENOENT;
+    }
 
-	/* check if there is at least one valid mode */
-	if (conn->count_modes == 0) {
-		fprintf(stderr, "no valid mode for connector %u\n",
-			conn->connector_id);
-		return -EFAULT;
-	}
+    /* check if there is at least one valid mode */
+    if (conn->count_modes == 0) {
+        fprintf(stderr, "no valid mode for connector %u\n", conn->connector_id);
+        return -EFAULT;
+    }
 
-	/* copy the mode information into our device structure */
-	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
-	dev->width = conn->modes[0].hdisplay;
-	dev->height = conn->modes[0].vdisplay;
-	fprintf(stderr, "mode for connector %u is %ux%u\n",
-		conn->connector_id, dev->width, dev->height);
+    /* copy the mode information into our device structure */
+    memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
+    dev->width = conn->modes[0].hdisplay;
+    dev->height = conn->modes[0].vdisplay;
+    fprintf(stderr, "mode for connector %u is %ux%u\n", conn->connector_id, dev->width, dev->height);
 
-	/* find a crtc for this connector */
-	ret = modeset_find_crtc(fd, res, conn, dev);
-	if (ret) {
-		fprintf(stderr, "no valid crtc for connector %u\n",
-			conn->connector_id);
-		return ret;
-	}
+    /* find a crtc for this connector */
+    ret = modeset_find_crtc(fd, res, conn, dev);
+    if (ret) {
+        fprintf(stderr, "no valid crtc for connector %u\n", conn->connector_id);
+        return ret;
+    }
 
-	/* create a framebuffer for this CRTC */
-	ret = modeset_create_fb(fd, dev);
-	if (ret) {
-		fprintf(stderr, "cannot create framebuffer for connector %u\n",
-			conn->connector_id);
-		return ret;
-	}
+    /* create a framebuffer for this CRTC */
+    ret = modeset_create_fb(fd, dev);
+    if (ret) {
+        fprintf(stderr, "cannot create framebuffer for connector %u\n", conn->connector_id);
+        return ret;
+    }
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -440,80 +430,79 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
  */
 
 static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
-			     struct modeset_dev *dev)
+                 struct modeset_dev *dev)
 {
-	drmModeEncoder *enc;
-	unsigned int i, j;
-	int32_t crtc;
-	struct modeset_dev *iter;
+    drmModeEncoder *enc;
+    unsigned int i, j;
+    int32_t crtc;
+    struct modeset_dev *iter;
 
-	/* first try the currently conected encoder+crtc */
-	if (conn->encoder_id)
-		enc = drmModeGetEncoder(fd, conn->encoder_id);
-	else
-		enc = NULL;
+    /* first try the currently conected encoder+crtc */
+    if (conn->encoder_id)
+        enc = drmModeGetEncoder(fd, conn->encoder_id);
+    else
+        enc = NULL;
 
-	if (enc) {
-		if (enc->crtc_id) {
-			crtc = enc->crtc_id;
-			for (iter = modeset_list; iter; iter = iter->next) {
-				if (iter->crtc == crtc) {
-					crtc = -1;
-					break;
-				}
-			}
+    if (enc) {
+        if (enc->crtc_id) {
+            crtc = enc->crtc_id;
+            for (iter = modeset_list; iter; iter = iter->next) {
+                if (iter->crtc == crtc) {
+                    crtc = -1;
+                    break;
+                }
+            }
 
-			if (crtc >= 0) {
-				drmModeFreeEncoder(enc);
-				dev->crtc = crtc;
-				return 0;
-			}
-		}
+            if (crtc >= 0) {
+                drmModeFreeEncoder(enc);
+                dev->crtc = crtc;
+                return 0;
+            }
+        }
 
-		drmModeFreeEncoder(enc);
-	}
+        drmModeFreeEncoder(enc);
+    }
 
-	/* If the connector is not currently bound to an encoder or if the
-	 * encoder+crtc is already used by another connector (actually unlikely
-	 * but lets be safe), iterate all other available encoders to find a
-	 * matching CRTC. */
-	for (i = 0; i < conn->count_encoders; ++i) {
-		enc = drmModeGetEncoder(fd, conn->encoders[i]);
-		if (!enc) {
-			fprintf(stderr, "cannot retrieve encoder %u:%u (%d): %m\n",
-				i, conn->encoders[i], errno);
-			continue;
-		}
+    /* If the connector is not currently bound to an encoder or if the
+     * encoder+crtc is already used by another connector (actually unlikely
+     * but lets be safe), iterate all other available encoders to find a
+     * matching CRTC. */
+    for (i = 0; i < conn->count_encoders; ++i) {
+        enc = drmModeGetEncoder(fd, conn->encoders[i]);
+        if (!enc) {
+            fprintf(stderr, "cannot retrieve encoder %u:%u (%d): %m\n", i, conn->encoders[i], errno);
+            continue;
+        }
 
-		/* iterate all global CRTCs */
-		for (j = 0; j < res->count_crtcs; ++j) {
-			/* check whether this CRTC works with the encoder */
-			if (!(enc->possible_crtcs & (1 << j)))
-				continue;
+        /* iterate all global CRTCs */
+        for (j = 0; j < res->count_crtcs; ++j) {
+            /* check whether this CRTC works with the encoder */
+            if (!(enc->possible_crtcs & (1 << j)))
+                continue;
 
-			/* check that no other device already uses this CRTC */
-			crtc = res->crtcs[j];
-			for (iter = modeset_list; iter; iter = iter->next) {
-				if (iter->crtc == crtc) {
-					crtc = -1;
-					break;
-				}
-			}
+            /* check that no other device already uses this CRTC */
+            crtc = res->crtcs[j];
+            for (iter = modeset_list; iter; iter = iter->next) {
+                if (iter->crtc == crtc) {
+                    crtc = -1;
+                    break;
+                }
+            }
 
-			/* we have found a CRTC, so save it and return */
-			if (crtc >= 0) {
-				drmModeFreeEncoder(enc);
-				dev->crtc = crtc;
-				return 0;
-			}
-		}
+            /* we have found a CRTC, so save it and return */
+            if (crtc >= 0) {
+                drmModeFreeEncoder(enc);
+                dev->crtc = crtc;
+                return 0;
+            }
+        }
 
-		drmModeFreeEncoder(enc);
-	}
+        drmModeFreeEncoder(enc);
+    }
 
-	fprintf(stderr, "cannot find suitable CRTC for connector %u\n",
-		conn->connector_id);
-	return -ENOENT;
+    fprintf(stderr, "cannot find suitable CRTC for connector %u\n",
+        conn->connector_id);
+    return -ENOENT;
 }
 
 /*
@@ -543,187 +532,122 @@ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 
 static int modeset_create_fb(int fd, struct modeset_dev *dev)
 {
-	struct drm_mode_create_dumb creq;
-	struct drm_mode_destroy_dumb dreq;
-	struct drm_mode_map_dumb mreq;
-	int ret;
+    struct drm_mode_create_dumb creq;
+    struct drm_mode_destroy_dumb dreq;
+    struct drm_mode_map_dumb mreq;
+    int ret;
 
-	/* create dumb buffer */
-	memset(&creq, 0, sizeof(creq));
-	creq.width = dev->width;
-	creq.height = dev->height;
-	creq.bpp = 32;
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
-	if (ret < 0) {
-		fprintf(stderr, "cannot create dumb buffer (%d): %m\n",
-			errno);
-		return -errno;
-	}
-	dev->stride = creq.pitch;
-	dev->size = creq.size;
-	dev->handle = creq.handle;
+    /* create dumb buffer */
+    memset(&creq, 0, sizeof(creq));
+    creq.width = dev->width;
+    creq.height = dev->height;
+    creq.bpp = 32;
+    ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
+    if (ret < 0) {
+        fprintf(stderr, "cannot create dumb buffer (%d): %m\n", errno);
+        return -errno;
+    }
+    dev->stride = creq.pitch;
+    dev->size = creq.size;
+    dev->handle = creq.handle;
 
-	enum Steps {create_framebuffer, prepare_buffer, memory_map, clear_buffer, err_fb, err_destroy, success};
-	Steps step = create_framebuffer;
-	switch(step)
-	{
-		/* create framebuffer object for the dumb-buffer */
-		case create_framebuffer: 
-			ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
-					dev->handle, &dev->fb);
-			if (ret) {
-				fprintf(stderr, "cannot create framebuffer (%d): %m\n",
-					errno);
-				ret = -errno;
-				step = err_destroy;
-			}
-			else { step = prepare_buffer; }
+    enum Steps {create_framebuffer, prepare_buffer, memory_map, clear_buffer, err_fb, err_destroy, success};
+    Steps step = create_framebuffer;
+    switch(step)
+    {
+        /* create framebuffer object for the dumb-buffer */
+        case create_framebuffer: 
+            ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride, dev->handle, &dev->fb);
+            if (ret) {
+                fprintf(stderr, "cannot create framebuffer (%d): %m\n", errno);
+                ret = -errno;
+                step = err_destroy;
+            }
+            else { step = prepare_buffer; }
 
-		/* prepare buffer for memory mapping */
-		case prepare_buffer:
-			memset(&mreq, 0, sizeof(mreq));
-			mreq.handle = dev->handle;
-			ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
-			if (ret) {
-				fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
-					errno);
-				ret = -errno;
-				step = err_fb;
-			}
-			else { step = memory_map; }
+        /* prepare buffer for memory mapping */
+        case prepare_buffer:
+            memset(&mreq, 0, sizeof(mreq));
+            mreq.handle = dev->handle;
+            ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+            if (ret) {
+                fprintf(stderr, "cannot map dumb buffer (%d): %m\n", errno);
+                ret = -errno;
+                step = err_fb;
+            }
+            else { step = memory_map; }
 
-		/* perform actual memory mapping */
-		case memory_map: 
-			dev->map = static_cast<uint8_t*>(mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-						fd, mreq.offset));
-			if (dev->map == MAP_FAILED) {
-				fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
-					errno);
-				ret = -errno;
-				step = err_fb;
-			}
-			else {step = clear_buffer; }
+        /* perform actual memory mapping */
+        case memory_map: 
+            dev->map = static_cast<uint8_t*>(mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mreq.offset));
+            if (dev->map == MAP_FAILED) {
+                fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n", errno);
+                ret = -errno;
+                step = err_fb;
+            }
+            else {step = clear_buffer; }
 
-		/* clear the framebuffer to 0 */
-		case clear_buffer: 
-			memset(dev->map, 0, dev->size);
-			step = success; 
-			break; 
+        /* clear the framebuffer to 0 */
+        case clear_buffer: 
+            memset(dev->map, 0, dev->size);
+            step = success; 
+            break; 
 
-		case err_fb: 
-			drmModeRmFB(fd, dev->fb);
-		case err_destroy:
-			memset(&dreq, 0, sizeof(dreq));
-			dreq.handle = dev->handle;
-			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
-			return ret;
-	}
+        case err_fb: 
+            drmModeRmFB(fd, dev->fb);
+        case err_destroy:
+            memset(&dreq, 0, sizeof(dreq));
+            dreq.handle = dev->handle;
+            drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+            return ret;
+    }
 
-	return 0;
+    return 0;
 }
 
 static void requestComplete(libcamera::Request *request)
 {
-	eglMakeCurrent(display, surface, surface, context);
+    eglMakeCurrent(display, surface, surface, context);
     // Code to follow
     if (request->status() == libcamera::Request::RequestCancelled)
-	return;
+    return;
 
     struct modeset_dev* iter;
     const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
-	libcamera::FrameBuffer *buffer = bufferPair.second;
+        libcamera::FrameBuffer *buffer = bufferPair.second;
         const libcamera::FrameMetadata &metadata = buffer->metadata();
-//	std::cout << " seq: " << std::setw(6) << std::setfill('0') << metadata.sequence << " bytesused: ";
 
-	unsigned int nplane = 0;
-	for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
-	{
-	    std::cout << plane.bytesused;
-	    if (++nplane < metadata.planes().size()) std::cout << "/";
-	}
+    unsigned int nplane = 0;
+    for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
+    {
+        std::cout << plane.bytesused;
+        if (++nplane < metadata.planes().size()) std::cout << "/";
+    }
 
-	for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
-	    if (!plane.fd.isValid())
-	    {
-		    break;
-	    }
-	    int fd = plane.fd.get();
-	    unsigned char * addr = (unsigned char *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
-	    if (addr == MAP_FAILED) {
-	    	    std::cout << "Map Failed" << std::endl;
-	    }
-	    for (iter = modeset_list; iter; iter = iter->next) {
-		    std::cout << "plane length: " << plane.length << std::endl;
+    for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
+        if (!plane.fd.isValid())
+        {
+            break;
+        }
+        int fd = plane.fd.get();
+        unsigned char * addr = (unsigned char *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (addr == MAP_FAILED) {
+                std::cout << "Map Failed" << std::endl;
+        }
+        for (iter = modeset_list; iter; iter = iter->next) {
+            std::cout << "plane length: " << plane.length << std::endl;
 
-			// should probably just be buffer swapped
-			//FrameData frame;
-			//frame.data = malloc(plane.length);
-			//memcpy(frame.data,addr,plane.length);
-			//frame.size = plane.length;
+            frame_manager.update(addr, plane.length);
 
-			//frameQueue.push(frame);
-			frame_manager.update(addr, plane.length);
+        }
+        //munmap(addr, plane.length);
+    }
+    std::cout << std::endl;
 
-			/*
-
-		    // Provide buffer to write to
-		    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT);
-		    //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-		    if (ptr) {
-		    memcpy(ptr, addr, plane.length);
-		    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-		    }
-		    else {
-			    std::cout << "still error" << std::endl;
-		    }
-		    std::cout << "input pbo mapped: " << ptr << std::endl;
-
-			// Transfer to texture
-			glBindTexture(GL_TEXTURE_2D, test_texture);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-			// Render to Framebuffer
-			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-		    glUseProgram(program);
-			glBindVertexArray(vao);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-			// Read Framebuffer
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-			//ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
-
-			// Get data out of buffer
-			std::vector<unsigned char> pixels(test_width*test_height* 4);
-			memcpy(pixels.data(), ptr, test_width * test_height * 4);
-		    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-
-			stbi_write_png("debug.png", test_width, test_height, 4, pixels.data(), test_width*4); // just make sure camera is actually reading things 
-
-			//memcpy(&iter->map[0],pixels.data(),pixels.size());
-
-			// debug, try to write to png first 
-			//stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
-			//std::cout << "Debug saved image to debug.png\n";
-			//memcpy(&iter->map[0],addr,plane.length);
-			//std::cout << "copied" << std::endl;
-			//std::cout << rtn << std::endl;
-			*/
-
-	    }
-	    //munmap(addr, plane.length);
-	}
-	std::cout << std::endl;
-
-   	request->reuse(libcamera::Request::ReuseBuffers);
-	//camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+       request->reuse(libcamera::Request::ReuseBuffers);
+    //camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -961,132 +885,131 @@ static const EGLint contextAttribs[] = {
 
 int main(int argc, char **argv)
 {
-	int ret, fd;
-	const char *card;
-	struct modeset_dev *iter;
-	//EGLDisplay display;
+    int ret, fd;
+    const char *card;
+    struct modeset_dev *iter;
+    //EGLDisplay display;
 
-        /* try to open camera */
-	std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
-	cm->start();
-	
-	for (auto const &camera : cm->cameras())
-	    std::cout << camera->id() << std::endl;
+    /* try to open camera */
+    std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
+    cm->start();
+    
+    for (auto const &camera : cm->cameras())
+        std::cout << camera->id() << std::endl;
 
-	auto cameras = cm->cameras();
-	if (cameras.empty()) {
-	    std::cout << "No cameras were identified on the system."
-       	       << std::endl;
-	    cm->stop();
-	    return EXIT_FAILURE;
-	}
+    auto cameras = cm->cameras();
+    if (cameras.empty()) {
+        std::cout << "No cameras were identified on the system." << std::endl;
+        cm->stop();
+        return EXIT_FAILURE;
+    }
 
-	std::string cameraId = cameras[0]->id();
+    std::string cameraId = cameras[0]->id();
 
-	camera = cm->get(cameraId);
+    camera = cm->get(cameraId);
 /*
  * Note that `camera` may not compare equal to `cameras[0]`.
  * In fact, it might simply be a `nullptr`, as the particular
  * device might have disappeared (and reappeared) in the meantime.
  */
-	camera->acquire();
+    camera->acquire();
 
-	std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
-	libcamera::StreamConfiguration &streamConfig = config->at(0);
-	std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	streamConfig.size.width = 2592;
-	streamConfig.size.height = 1944;
-	config->validate();
-	std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	camera->configure(config.get());
+    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
+    libcamera::StreamConfiguration &streamConfig = config->at(0);
+    std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
+    streamConfig.size.width = 2592;
+    streamConfig.size.height = 1944;
+    config->validate();
+    std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
+    camera->configure(config.get());
 
-	libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
+    libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
 
-	for (libcamera::StreamConfiguration &cfg : *config) {
-	    int ret = allocator->allocate(cfg.stream());
-	    if (ret < 0) {
-	        std::cerr << "Can't allocate buffers" << std::endl;
-	        return -ENOMEM;
-	    }
+    for (libcamera::StreamConfiguration &cfg : *config) {
+        int ret = allocator->allocate(cfg.stream());
+        if (ret < 0) {
+            std::cerr << "Can't allocate buffers" << std::endl;
+            return -ENOMEM;
+        }
 
-	    size_t allocated = allocator->buffers(cfg.stream()).size();
-	    std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
-	}
+        size_t allocated = allocator->buffers(cfg.stream()).size();
+        std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
+    }
 
-	libcamera::Stream *stream = streamConfig.stream();
-	const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
-	std::vector<std::unique_ptr<libcamera::Request>> requests;
+    libcamera::Stream *stream = streamConfig.stream();
+    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
+    std::vector<std::unique_ptr<libcamera::Request>> requests;
 
-	for (unsigned int i = 0; i < buffers.size(); ++i) {
-	    std::unique_ptr<libcamera::Request> request = camera->createRequest();
-	    if (!request)
-	    {
-	        std::cerr << "Can't create request" << std::endl;
-	        return -ENOMEM;
-	    }
+    for (unsigned int i = 0; i < buffers.size(); ++i) {
+        std::unique_ptr<libcamera::Request> request = camera->createRequest();
+        if (!request)
+        {
+            std::cerr << "Can't create request" << std::endl;
+            return -ENOMEM;
+        }
 
-	    const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-	    int ret = request->addBuffer(stream, buffer.get());
-	    if (ret < 0)
-	    {
-  	        std::cerr << "Can't set buffer for request"
-        	      << std::endl;
-	        return ret;
-	    }
+        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
+        int ret = request->addBuffer(stream, buffer.get());
+        if (ret < 0)
+        {
+              std::cerr << "Can't set buffer for request"
+                  << std::endl;
+            return ret;
+        }
 
-	    requests.push_back(std::move(request));
-	}
-	camera->requestCompleted.connect(requestComplete);
-	//camera->start();
-	//for (std::unique_ptr<libcamera::Request> &request : requests)
-	//   camera->queueRequest(request.get());
+        requests.push_back(std::move(request));
+    }
+    camera->requestCompleted.connect(requestComplete);
+    //camera->start();
+    //for (std::unique_ptr<libcamera::Request> &request : requests)
+    //   camera->queueRequest(request.get());
 
-	/* check which DRM device to open */
-	if (argc > 1)
-		card = argv[1];
-	else
-		card = "/dev/dri/card1";
+    /* check which DRM device to open */
+    if (argc > 1)
+        card = argv[1];
+    else
+        card = "/dev/dri/card1";
 
-	fprintf(stderr, "using card '%s'\n", card);
+    fprintf(stderr, "using card '%s'\n", card);
 
-	/* open the DRM device */
-	ret = modeset_open(&fd, card);
-	if (ret)
-	{
-		if (ret) {
-			errno = -ret;
-			fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-		} 
-		else {
-			fprintf(stderr, "exiting\n");
-		}
-		return ret;
-	}
+    /* open the DRM device */
+    ret = modeset_open(&fd, card);
+    if (ret)
+    {
+        if (ret) {
+            errno = -ret;
+            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+        } 
+        else {
+            fprintf(stderr, "exiting\n");
+        }
+        return ret;
+    }
 
-	/* prepare all connectors and CRTCs */
-	ret = modeset_prepare(fd);
+    /* prepare all connectors and CRTCs */
+    ret = modeset_prepare(fd);
 
-	if (ret) {
-		close(fd);
-		if (ret) {
-			errno = -ret;
-			fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-		} 
-		else {
-			fprintf(stderr, "exiting\n");
-		}
-		return ret;
-	}
+    if (ret) {
+        close(fd);
+        if (ret) {
+            errno = -ret;
+            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+        } 
+        else {
+            fprintf(stderr, "exiting\n");
+        }
+        return ret;
+    }
 
-	/* perform actual modesetting on each found connector+CRTC */
-	for (iter = modeset_list; iter; iter = iter->next) {
-		iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
-		ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
-				     &iter->conn, 1, &iter->mode);
-		if (ret)
-			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
-				iter->conn, errno);
-	}
+    /* perform actual modesetting on each found connector+CRTC */
+    for (iter = modeset_list; iter; iter = iter->next) {
+        iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
+        ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
+                     &iter->conn, 1, &iter->mode);
+        if (ret)
+            fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
+                iter->conn, errno);
+    }
 
 
     /* OpenGL stuff */ 
@@ -1214,111 +1137,109 @@ int main(int argc, char **argv)
     std::cout << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
-	
+
     std::cout << "after using program: " << glGetError() << std::endl;
     GLint isCompiled = 0;
     glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
-	if(isCompiled == GL_FALSE)
-	{
-		GLint maxLength = 0;
-		glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
+    if(isCompiled == GL_FALSE)
+    {
+        GLint maxLength = 0;
+        glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
 
-		// The maxLength includes the NULL character
-		std::vector<GLchar> errorLog(maxLength);
-		glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
-		std::cout << &errorLog[0] << std::endl;
+        // The maxLength includes the NULL character
+        std::vector<GLchar> errorLog(maxLength);
+        glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
+        std::cout << &errorLog[0] << std::endl;
 
-		// Provide the infolog in whatever manor you deem best.
-		// Exit with failure.
-		glDeleteShader(frag); // Don't leak the shader.
-		return 0;
-	}
+        // Provide the infolog in whatever manor you deem best.
+        // Exit with failure.
+        glDeleteShader(frag); // Don't leak the shader.
+        return 0;
+    }
 
-	
-	// load test image  
-	//int test_width, test_height, test_nrChannels;
-	/*
-	unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
-	if (!test_data)
-	{
-		std::cout << "Failed to load texture" << std::endl;
-		return 0;
-	}
-	stbi_image_free(test_data);
-	*/
+    
+    // load test image  
+    //int test_width, test_height, test_nrChannels;
+    /*
+    unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
+    if (!test_data)
+    {
+        std::cout << "Failed to load texture" << std::endl;
+        return 0;
+    }
+    stbi_image_free(test_data);
+    */
 
-	size_t image_size = test_width * test_height * 4; // RGBA
+    size_t image_size = test_width * test_height * 4; // RGBA
 
-	std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
+    std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
 
-	// setup texture for input images (from camera)
-	glGenTextures(1, &test_texture); 
-	glBindTexture(GL_TEXTURE_2D, test_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    // setup texture for input images (from camera)
+    glGenTextures(1, &test_texture); 
+    glBindTexture(GL_TEXTURE_2D, test_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
-	// setup pbo for input images (from camera)
-	glGenBuffers(1, &input_pbo);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
-						 
+    // setup pbo for input images (from camera)
+    glGenBuffers(1, &input_pbo);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
 
+    // setup pbo for output image (to screen)
+    glGenBuffers(1, &output_pbo);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+    glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
 
-	// setup pbo for output image (to screen)
-	glGenBuffers(1, &output_pbo);
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-	glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+    // load lut image 
+    int lut_width, lut_height, lut_depth, lut_nrChannels;
+    unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
+    std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
+    if (!lut_data)
+    {
+        std::cout << "Failed to load texture" << std::endl;
+        return 0;
+    }
 
-	// load lut image 
-	int lut_width, lut_height, lut_depth, lut_nrChannels;
-	unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
-	std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
-	if (!lut_data)
-	{
-		std::cout << "Failed to load texture" << std::endl;
-		return 0;
-	}
+    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
+    // setup lut texture
+    glGenTextures(1, &lut_texture); 
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_3D, 0);
 
-	size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
-	// setup lut texture
-	glGenTextures(1, &lut_texture); 
-	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_3D, 0);
+    // setup pbo for lut 
+    glGenBuffers(1, &lut_pbo);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-	// setup pbo for lut 
-	glGenBuffers(1, &lut_pbo);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+    memcpy(ptr, lut_data, lut_size);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-	void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-	memcpy(ptr, lut_data, lut_size);
-	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-
-	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-	glBindTexture(GL_TEXTURE_3D, 0);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-	stbi_image_free(lut_data);
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_3D, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    stbi_image_free(lut_data);
 
 
     std::cout << "before setting uniforms: " << glGetError() << std::endl;
-	// Set uniforms
+    // Set uniforms
     glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
 
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
 
-	// create fbo bound to output 
-	//unsigned int dstFBO, dstTex;
+    // create fbo bound to output 
+    //unsigned int dstFBO, dstTex;
     
     glGenFramebuffers(1, &dstFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -1330,31 +1251,31 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dstTex, 0);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-	{
-		switch(glCheckFramebufferStatus(GL_FRAMEBUFFER))
-		{
-    	case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+    {
+        switch(glCheckFramebufferStatus(GL_FRAMEBUFFER))
+        {
+        case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
         // Attached image has width/height of 0
-		std::cout << "incomplete" << std::endl;
+        std::cout << "incomplete" << std::endl;
         break;
     case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
         // No images attached to FBO
-	std::cout << "missing attachemnt" << std::endl;
+    std::cout << "missing attachemnt" << std::endl;
         break;
     case GL_FRAMEBUFFER_UNSUPPORTED:
         // Format combination not supported
-	std::cout << "unsupported" << std::endl;
+    std::cout << "unsupported" << std::endl;
         break;
     default:
         printf("Unknown framebuffer error: 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
-		}
-		return 0;
-	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	
+        }
+        return 0;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
 
-	// run GL program?
-	GLuint vao,vbo;
+    // run GL program?
+    GLuint vao,vbo;
     glGenVertexArrays(1,&vao);
     glBindVertexArray(vao);
     glGenBuffers(1,&vbo);
@@ -1375,128 +1296,128 @@ int main(int argc, char **argv)
     void* test_ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, image_size, GL_MAP_WRITE_BIT);
     if (test_ptr)
     {
-	    std::cout << "test worked" << std::endl;
-	    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+        std::cout << "test worked" << std::endl;
+        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
     }
     
-	// Bind textures
-	glViewport(0,0,test_width,test_height);
-	glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+    // Bind textures
+    glViewport(0,0,test_width,test_height);
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     std::cout << "after binding textures: " << glGetError() << std::endl;
 /*
-	// Draw
+    // Draw
     glViewport(0,0,test_width,test_height);
     glClear(GL_COLOR_BUFFER_BIT);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
     std::cout << "after drawing: " << glGetError() << std::endl;
 
-	// Read pixels
+    // Read pixels
     std::vector<unsigned char> pixels(test_width * test_height * 4);
     glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-	// Save to PNG
+    // Save to PNG
     stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
     std::cout << "Saved color-corrected image to output.png\n";
 */
-	camera->start();
-	for (std::unique_ptr<libcamera::Request> &request : requests)
-	   camera->queueRequest(request.get());
-	
-	std::this_thread::sleep_for(std::chrono::seconds(1));
-	int once = 0;
-	std::unique_ptr<FrameData> ptr_frame;
-	while(once < 10) {
-		//FrameData frame; 
-		
-		if (frame_manager.data_available()) {
-			// get data 
-			frame_manager.swap_buffers(ptr_frame);
+    camera->start();
+    for (std::unique_ptr<libcamera::Request> &request : requests)
+       camera->queueRequest(request.get());
+    
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    int once = 0;
+    std::unique_ptr<FrameData> ptr_frame;
+    while(once < 10) {
+        //FrameData frame; 
+        
+        if (frame_manager.data_available()) {
+            // get data 
+            frame_manager.swap_buffers(ptr_frame);
 
-			// Provide buffer to write to
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-			void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, frame.size, GL_MAP_WRITE_BIT);
-			//GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-			if (ptr) {
-				memcpy(ptr, ptr_frame->data, ptr_frame->size);
-				stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
-				glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-			}
-			else {
-				std::cout << "still error" << std::endl;
-			}
-			std::cout << "input pbo mapped: " << ptr << std::endl;
+            // Provide buffer to write to
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
+            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, frame.size, GL_MAP_WRITE_BIT);
+            //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+            if (ptr) {
+                memcpy(ptr, ptr_frame->data, ptr_frame->size);
+                stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
+                glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+            }
+            else {
+                std::cout << "still error" << std::endl;
+            }
+            std::cout << "input pbo mapped: " << ptr << std::endl;
 
-			// Transfer to texture
-			glBindTexture(GL_TEXTURE_2D, test_texture);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            // Transfer to texture
+            glBindTexture(GL_TEXTURE_2D, test_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-			// Render to Framebuffer
-			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-			glViewport(0,0,test_width,test_height);
+            // Render to Framebuffer
+            glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+            glViewport(0,0,test_width,test_height);
 
-			glUseProgram(program);
+            glUseProgram(program);
 
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, test_texture);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_3D, lut_texture);
-			glBindVertexArray(vao);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, test_texture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            glBindVertexArray(vao);
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-			// Read Framebuffer
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-			//ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+            // Read Framebuffer
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+            glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
 
-			// Get data out of buffer
-			std::vector<unsigned char> pixels(test_width*test_height* 4);
-			memcpy(pixels.data(), ptr, test_width * test_height * 4);
-			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            // Get data out of buffer
+            std::vector<unsigned char> pixels(test_width*test_height* 4);
+            memcpy(pixels.data(), ptr, test_width * test_height * 4);
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
-			//stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
-			std::cout << "Written" << std::endl;
-			//memcpy(&iter->map[0],pixels.data(),pixels.size());
+            //stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
+            std::cout << "Written" << std::endl;
+            //memcpy(&iter->map[0],pixels.data(),pixels.size());
 
-			// debug, try to write to png first 
-			//stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
-			//std::cout << "Debug saved image to debug.png\n";
-			//memcpy(&iter->map[0],addr,plane.length);
-			//std::cout << "copied" << std::endl;
-			//std::cout << rtn << std::endl;
-			once++;
-		}
+            // debug, try to write to png first 
+            //stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
+            //std::cout << "Debug saved image to debug.png\n";
+            //memcpy(&iter->map[0],addr,plane.length);
+            //std::cout << "copied" << std::endl;
+            //std::cout << rtn << std::endl;
+            once++;
+        }
 
-	}
+    }
 
-	/* cleanup everything */
-	modeset_cleanup(fd);
+    /* cleanup everything */
+    modeset_cleanup(fd);
 
-	camera->stop();
-	allocator->free(stream);
-	delete allocator;
-	camera->release();
-	camera.reset();
-	cm->stop();
+    camera->stop();
+    allocator->free(stream);
+    delete allocator;
+    camera->release();
+    camera.reset();
+    cm->stop();
 
 
-	ret = 0;
+    ret = 0;
 
-	close(fd);
-	if (ret) {
-		errno = -ret;
-		fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-	} else {
-		fprintf(stderr, "exiting\n");
-	}
-	return ret;
+    close(fd);
+    if (ret) {
+        errno = -ret;
+        fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+    } else {
+        fprintf(stderr, "exiting\n");
+    }
+    return ret;
 }
 
 
@@ -1509,39 +1430,39 @@ int main(int argc, char **argv)
 
 static void modeset_cleanup(int fd)
 {
-	struct modeset_dev *iter;
-	struct drm_mode_destroy_dumb dreq;
+    struct modeset_dev *iter;
+    struct drm_mode_destroy_dumb dreq;
 
-	while (modeset_list) {
-		/* remove from global list */
-		iter = modeset_list;
-		modeset_list = iter->next;
+    while (modeset_list) {
+        /* remove from global list */
+        iter = modeset_list;
+        modeset_list = iter->next;
 
-		/* restore saved CRTC configuration */
-		drmModeSetCrtc(fd,
-			       iter->saved_crtc->crtc_id,
-			       iter->saved_crtc->buffer_id,
-			       iter->saved_crtc->x,
-			       iter->saved_crtc->y,
-			       &iter->conn,
-			       1,
-			       &iter->saved_crtc->mode);
-		drmModeFreeCrtc(iter->saved_crtc);
+        /* restore saved CRTC configuration */
+        drmModeSetCrtc(fd,
+                   iter->saved_crtc->crtc_id,
+                   iter->saved_crtc->buffer_id,
+                   iter->saved_crtc->x,
+                   iter->saved_crtc->y,
+                   &iter->conn,
+                   1,
+                   &iter->saved_crtc->mode);
+        drmModeFreeCrtc(iter->saved_crtc);
 
-		/* unmap buffer */
-		munmap(iter->map, iter->size);
+        /* unmap buffer */
+        munmap(iter->map, iter->size);
 
-		/* delete framebuffer */
-		drmModeRmFB(fd, iter->fb);
+        /* delete framebuffer */
+        drmModeRmFB(fd, iter->fb);
 
-		/* delete dumb buffer */
-		memset(&dreq, 0, sizeof(dreq));
-		dreq.handle = iter->handle;
-		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+        /* delete dumb buffer */
+        memset(&dreq, 0, sizeof(dreq));
+        dreq.handle = iter->handle;
+        drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
 
-		/* free allocated memory */
-		free(iter);
-	}
+        /* free allocated memory */
+        free(iter);
+    }
 }
 
 /*
