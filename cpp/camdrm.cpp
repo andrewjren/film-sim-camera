@@ -47,10 +47,14 @@
 #include <EGL/egl.h>
 //#include <GLES2/gl2.h>
 #include <GLES3/gl3.h>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
+
 static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
@@ -94,6 +98,42 @@ float quad[] = {
 		1,  1, 1, 1,
 	-1,  1, 0, 1
 };
+struct FrameData {
+    void* data;
+    size_t size;
+    uint64_t timestamp;
+};
+
+class FrameQueue {
+    std::queue<FrameData> queue;
+    std::mutex mutex;
+    std::condition_variable cv;
+
+public:
+    void push(FrameData frame) {
+        std::lock_guard<std::mutex> lock(mutex);
+        queue.push(frame);
+        cv.notify_one();
+    }
+
+    FrameData pop() {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this]{ return !queue.empty(); });
+        FrameData frame = queue.front();
+        queue.pop();
+        return frame;
+    }
+
+    bool tryPop(FrameData& frame) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (queue.empty()) return false;
+        frame = queue.front();
+        queue.pop();
+        return true;
+    }
+};
+
+FrameQueue frameQueue;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
