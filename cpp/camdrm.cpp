@@ -79,6 +79,7 @@ unsigned int dstFBO, dstTex;
 unsigned int lut_texture;
 unsigned int test_texture;
 unsigned int input_pbo;
+unsigned int lut_pbo;
 unsigned int output_pbo;
 GLuint vao,vbo;
 GLuint program, vert, frag;
@@ -569,7 +570,7 @@ static void requestComplete(libcamera::Request *request)
     for (auto bufferPair : buffers) {
 	libcamera::FrameBuffer *buffer = bufferPair.second;
         const libcamera::FrameMetadata &metadata = buffer->metadata();
-	std::cout << " seq: " << std::setw(6) << std::setfill('0') << metadata.sequence << " bytesused: ";
+//	std::cout << " seq: " << std::setw(6) << std::setfill('0') << metadata.sequence << " bytesused: ";
 
 	unsigned int nplane = 0;
 	for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
@@ -589,22 +590,24 @@ static void requestComplete(libcamera::Request *request)
 	    	    std::cout << "Map Failed" << std::endl;
 	    }
 	    for (iter = modeset_list; iter; iter = iter->next) {
+		    std::cout << "plane length: " << plane.length << std::endl;
 
 		    // Provide buffer to write to
 		    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-		 	if (ptr) {
-				memcpy(ptr, addr, plane.length);
-		    	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-				std::cout << "input pbo mapped: " << ptr << std::endl;
-			}
-			else {
-				std::cout << "input pbo failed" << std::endl;
-			}
+		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT);
+		    //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+		    if (ptr) {
+		    memcpy(ptr, addr, plane.length);
+		    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+		    }
+		    else {
+			    std::cout << "still error" << std::endl;
+		    }
+		    std::cout << "input pbo mapped: " << ptr << std::endl;
 
 			// Transfer to texture
-			glBindTexture(GL_TEXTURE_2D, texture);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+			glBindTexture(GL_TEXTURE_2D, test_texture);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -617,12 +620,13 @@ static void requestComplete(libcamera::Request *request)
 
 			// Read Framebuffer
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-			glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, imageSize, GL_MAP_READ_BIT);
+			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+			//ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
 
 			// Get data out of buffer
 			std::vector<unsigned char> pixels(test_width*test_height* 4);
-			memcpy(pixels.data(), ptr, imageSize);
+			memcpy(pixels.data(), ptr, test_width * test_height * 4);
 		    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
 			stbi_write_png("debug.png", test_width, test_height, 4, pixels.data(), test_width*4); // just make sure camera is actually reading things 
@@ -1031,6 +1035,8 @@ int main(int argc, char **argv)
     // We will use the screen resolution as the desired width and height for the viewport.
     int desiredWidth = 2592;
     int desiredHeight = 1944;
+    int test_width = 2592;
+    int test_height = 1944;
 
 
     // Make sure that we can use OpenGL in this EGL app.
@@ -1166,53 +1172,67 @@ int main(int argc, char **argv)
 
 	size_t image_size = test_width * test_height * 4; // RGBA
 
+	std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
+
 	// setup texture for input images (from camera)
 	glGenTextures(1, &test_texture); 
 	glBindTexture(GL_TEXTURE_2D, test_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, test_width, test_height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr); 
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	std::cout << "After input" << std::endl;
 
 	// setup pbo for input images (from camera)
 	glGenBuffers(1, &input_pbo);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, imageSize, nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
+						 
+
 
 	// setup pbo for output image (to screen)
 	glGenBuffers(1, &output_pbo);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-	glBufferData(GL_PIXEL_PACK_BUFFER, imageSize, nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
 
 	// load lut image 
 	int lut_width, lut_height, lut_depth, lut_nrChannels;
 	unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
+	std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << std::endl;
 	if (!lut_data)
 	{
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
 
-	size_t lut_size = 144 * 144 * 144 * 4; // 3D RGBA
+	size_t lut_size = lut_width * lut_height; // 3D RGBA
 	// setup lut texture
 	glGenTextures(1, &lut_texture); 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 144, 144, 144, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glBindTexture(GL_TEXTURE_3D, 0);
-	stbi_image_free(lut_data);
 
 	// setup pbo for lut 
 	glGenBuffers(1, &lut_pbo);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, lut_data, GL_STREAM_DRAW);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+	void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+	memcpy(ptr, lut_data, lut_size);
+	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glSubTexImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glBindTexture(GL_TEXTURE_3D, 0);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+	stbi_image_free(lut_data);
+
 
     std::cout << "before setting uniforms: " << glGetError() << std::endl;
 	// Set uniforms
@@ -1224,18 +1244,34 @@ int main(int argc, char **argv)
 	// create fbo bound to output 
 	//unsigned int dstFBO, dstTex;
     
+    glGenFramebuffers(1, &dstFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+
     glGenTextures(1, &dstTex);
     glBindTexture(GL_TEXTURE_2D, dstTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glGenFramebuffers(1, &dstFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dstTex, 0);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
-        std::cerr << "Destination FBO incomplete!\n";
+		switch(glCheckFramebufferStatus(GL_FRAMEBUFFER))
+		{
+    	case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+        // Attached image has width/height of 0
+		std::cout << "incomplete" << std::endl;
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+        // No images attached to FBO
+	std::cout << "missing attachemnt" << std::endl;
+        break;
+    case GL_FRAMEBUFFER_UNSUPPORTED:
+        // Format combination not supported
+	std::cout << "unsupported" << std::endl;
+        break;
+    default:
+        printf("Unknown framebuffer error: 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
+		}
 		return 0;
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1254,6 +1290,7 @@ int main(int argc, char **argv)
     glEnableVertexAttribArray(posLoc);
     glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
     glEnableVertexAttribArray(uvLoc);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
 
     std::cout << "after running gL program: " << glGetError() << std::endl;
 
