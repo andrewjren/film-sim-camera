@@ -701,7 +701,7 @@ static void requestComplete(libcamera::Request *request)
 	std::cout << std::endl;
 
    	request->reuse(libcamera::Request::ReuseBuffers);
-	camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+	//camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -1356,7 +1356,7 @@ int main(int argc, char **argv)
 	    std::cout << "test worked" << std::endl;
 	    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
     }
-    /*
+    
 	// Bind textures
 	glViewport(0,0,test_width,test_height);
 	glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -1365,7 +1365,7 @@ int main(int argc, char **argv)
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     std::cout << "after binding textures: " << glGetError() << std::endl;
-
+/*
 	// Draw
     glViewport(0,0,test_width,test_height);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -1384,8 +1384,9 @@ int main(int argc, char **argv)
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
 	
-	//std::this_thread::sleep_for(std::chrono::seconds(5));
-	while(true) {
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+	int once = 0;
+	while(once < 10) {
 		FrameData frame; 
 
 		if (frameQueue.tryPop(frame)) {
@@ -1395,6 +1396,7 @@ int main(int argc, char **argv)
 			//GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
 			if (ptr) {
 			memcpy(ptr, frame.data, frame.size);
+			stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
 			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			}
 			else {
@@ -1411,7 +1413,14 @@ int main(int argc, char **argv)
 
 			// Render to Framebuffer
 			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			glViewport(0,0,test_width,test_height);
+
 			glUseProgram(program);
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, test_texture);
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_3D, lut_texture);
 			glBindVertexArray(vao);
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
@@ -1426,7 +1435,7 @@ int main(int argc, char **argv)
 			memcpy(pixels.data(), ptr, test_width * test_height * 4);
 			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
-			stbi_write_png("debug.png", test_width, test_height, 4, pixels.data(), test_width*4); // just make sure camera is actually reading things 
+			//stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
 			std::cout << "Written" << std::endl;
 			//memcpy(&iter->map[0],pixels.data(),pixels.size());
 
@@ -1436,7 +1445,10 @@ int main(int argc, char **argv)
 			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << "copied" << std::endl;
 			//std::cout << rtn << std::endl;
+			free(frame.data);
+			once++;
 		}
+
 	}
 
 	/* cleanup everything */
