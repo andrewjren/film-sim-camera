@@ -636,6 +636,16 @@ static void requestComplete(libcamera::Request *request)
 	    for (iter = modeset_list; iter; iter = iter->next) {
 		    std::cout << "plane length: " << plane.length << std::endl;
 
+			// should probably just be buffer swapped
+			FrameData frame;
+			frame.data = malloc(plane.length);
+			memcpy(frame.data,addr,plane.length);
+			frame.size = plane.length;
+
+			frameQueue.push(frame);
+
+			/*
+
 		    // Provide buffer to write to
 		    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
 		    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, plane.length, GL_MAP_WRITE_BIT);
@@ -683,6 +693,7 @@ static void requestComplete(libcamera::Request *request)
 			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << "copied" << std::endl;
 			//std::cout << rtn << std::endl;
+			*/
 
 	    }
 	    //munmap(addr, plane.length);
@@ -1373,7 +1384,60 @@ int main(int argc, char **argv)
 	for (std::unique_ptr<libcamera::Request> &request : requests)
 	   camera->queueRequest(request.get());
 	
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	//std::this_thread::sleep_for(std::chrono::seconds(5));
+	while(true) {
+		FrameData frame; 
+
+		if (frameQueue.tryPop(frame)) {
+			// Provide buffer to write to
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
+			void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, frame.size, GL_MAP_WRITE_BIT);
+			//GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+			if (ptr) {
+			memcpy(ptr, frame.data, frame.size);
+			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+			}
+			else {
+				std::cout << "still error" << std::endl;
+			}
+			std::cout << "input pbo mapped: " << ptr << std::endl;
+
+			// Transfer to texture
+			glBindTexture(GL_TEXTURE_2D, test_texture);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+			// Render to Framebuffer
+			glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+			glUseProgram(program);
+			glBindVertexArray(vao);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+			// Read Framebuffer
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+			glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+			//ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+			ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+
+			// Get data out of buffer
+			std::vector<unsigned char> pixels(test_width*test_height* 4);
+			memcpy(pixels.data(), ptr, test_width * test_height * 4);
+			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+
+			stbi_write_png("debug.png", test_width, test_height, 4, pixels.data(), test_width*4); // just make sure camera is actually reading things 
+			std::cout << "Written" << std::endl;
+			//memcpy(&iter->map[0],pixels.data(),pixels.size());
+
+			// debug, try to write to png first 
+			//stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
+			//std::cout << "Debug saved image to debug.png\n";
+			//memcpy(&iter->map[0],addr,plane.length);
+			//std::cout << "copied" << std::endl;
+			//std::cout << rtn << std::endl;
+		}
+	}
 
 	/* cleanup everything */
 	modeset_cleanup(fd);
