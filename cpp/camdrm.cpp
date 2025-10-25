@@ -74,15 +74,15 @@ static struct gbm_bo *previousBo = NULL;
 static uint32_t previousFb;
 
 // added to make render loop easier
-int test_width, test_height, test_nrChannels;
-unsigned int dstFBO, dstTex;
-unsigned int lut_texture;
-unsigned int test_texture;
-unsigned int input_pbo;
-unsigned int lut_pbo;
-unsigned int output_pbo;
-GLuint vao,vbo;
-GLuint program, vert, frag;
+static int test_width, test_height, test_nrChannels;
+static unsigned int dstFBO, dstTex;
+static unsigned int lut_texture;
+static unsigned int test_texture;
+static unsigned int input_pbo;
+static unsigned int lut_pbo;
+static unsigned int output_pbo;
+static GLuint vao,vbo;
+static GLuint program, vert, frag;
 
 // Setup full screen quad
 float quad[] = {
@@ -1181,7 +1181,6 @@ int main(int argc, char **argv)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	std::cout << "After input" << std::endl;
 
 	// setup pbo for input images (from camera)
 	glGenBuffers(1, &input_pbo);
@@ -1200,18 +1199,18 @@ int main(int argc, char **argv)
 	// load lut image 
 	int lut_width, lut_height, lut_depth, lut_nrChannels;
 	unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
-	std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << std::endl;
+	std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
 	if (!lut_data)
 	{
 		std::cout << "Failed to load texture" << std::endl;
 		return 0;
 	}
 
-	size_t lut_size = lut_width * lut_height; // 3D RGBA
+	size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
 	// setup lut texture
 	glGenTextures(1, &lut_texture); 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 144, 144, 144, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glBindTexture(GL_TEXTURE_3D, 0);
@@ -1228,7 +1227,7 @@ int main(int argc, char **argv)
 	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
 	glBindTexture(GL_TEXTURE_3D, lut_texture);
-	glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 	glBindTexture(GL_TEXTURE_3D, 0);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 	stbi_image_free(lut_data);
@@ -1293,7 +1292,15 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER,0);
 
     std::cout << "after running gL program: " << glGetError() << std::endl;
+    std::cout << "image_size: " << image_size << std::endl;
 
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
+    void* test_ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, image_size, GL_MAP_WRITE_BIT);
+    if (test_ptr)
+    {
+	    std::cout << "test worked" << std::endl;
+	    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    }
     /*
 	// Bind textures
 	glViewport(0,0,test_width,test_height);
