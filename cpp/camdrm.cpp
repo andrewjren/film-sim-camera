@@ -83,6 +83,9 @@ static unsigned int lut_pbo;
 static unsigned int output_pbo;
 static GLuint vao,vbo;
 static GLuint program, vert, frag;
+static EGLDisplay display;
+static EGLSurface surface;
+static EGLContext context;
 
 // Setup full screen quad
 float quad[] = {
@@ -560,6 +563,7 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 
 static void requestComplete(libcamera::Request *request)
 {
+	eglMakeCurrent(display, surface, surface, context);
     // Code to follow
     if (request->status() == libcamera::Request::RequestCancelled)
 	return;
@@ -887,7 +891,7 @@ int main(int argc, char **argv)
 	int ret, fd;
 	const char *card;
 	struct modeset_dev *iter;
-	EGLDisplay display;
+	//EGLDisplay display;
 
         /* try to open camera */
 	std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
@@ -1071,7 +1075,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    EGLContext context =
+    context =
         eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
     if (context == EGL_NO_CONTEXT)
     {
@@ -1081,7 +1085,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    EGLSurface surface =
+    surface =
         eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
     if (surface == EGL_NO_SURFACE)
     {
