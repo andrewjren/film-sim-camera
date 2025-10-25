@@ -50,6 +50,7 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <utility>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -101,21 +102,29 @@ float quad[] = {
 struct FrameData {
     void* data;
     size_t size;
-    uint64_t timestamp;
 };
 
-class FrameQueue {
-    std::queue<FrameData> queue;
+/* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
+   frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 
+   preview DRM window */
+class FrameManager {
+private:
+    //std::queue<FrameData> queue;
+	std::pair<bool, std::unique_ptr<FrameData>> frame_data; // <data available, pointer to data>
     std::mutex mutex;
     std::condition_variable cv;
 
 public:
-    void push(FrameData frame) {
+    void update(FrameData* frame_ptr, size_t len) {
         std::lock_guard<std::mutex> lock(mutex);
-        queue.push(frame);
-        cv.notify_one();
+		frame.second.reset();
+		memcpy(frame.second->data, frame_ptr, len);
+		frame.second->size = len;
+		frame_data.first = true; // 
+        //queue.push(frame);
+        //cv.notify_one();
     }
-
+/*
     FrameData pop() {
         std::unique_lock<std::mutex> lock(mutex);
         cv.wait(lock, [this]{ return !queue.empty(); });
@@ -123,17 +132,29 @@ public:
         queue.pop();
         return frame;
     }
-
-    bool tryPop(FrameData& frame) {
+*/
+    /*bool tryPop(FrameData& frame) {
         std::lock_guard<std::mutex> lock(mutex);
         if (queue.empty()) return false;
         frame = queue.front();
         queue.pop();
         return true;
-    }
+    }*/
+
+   bool data_available() {
+	   std::unique_lock<std::mutex> lock(mutex);
+	   return frame_data.first;
+   }
+
+   void swap_buffers(std::unique_ptr<FrameData> ptr_in) {
+	   std::lock_guard<std::mutex> lock(mutex);
+	   frame_data.first = false; // processed this data
+	   frame_data.second.swap(ptr_in);
+   }
 };
 
-FrameQueue frameQueue;
+//FrameQueue frameQueue;
+FrameManager frame_manager;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -637,12 +658,13 @@ static void requestComplete(libcamera::Request *request)
 		    std::cout << "plane length: " << plane.length << std::endl;
 
 			// should probably just be buffer swapped
-			FrameData frame;
-			frame.data = malloc(plane.length);
-			memcpy(frame.data,addr,plane.length);
-			frame.size = plane.length;
+			//FrameData frame;
+			//frame.data = malloc(plane.length);
+			//memcpy(frame.data,addr,plane.length);
+			//frame.size = plane.length;
 
-			frameQueue.push(frame);
+			//frameQueue.push(frame);
+			frame_manager.update(addr, plane.length);
 
 			/*
 
@@ -1386,18 +1408,22 @@ int main(int argc, char **argv)
 	
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	int once = 0;
+	std::unique_ptr<FrameData> ptr_frame;
 	while(once < 10) {
-		FrameData frame; 
+		//FrameData frame; 
+		
+		if (frame_manager.data_available()) {
+			// get data 
+			frame_manager.swap_buffers(ptr_frame);
 
-		if (frameQueue.tryPop(frame)) {
 			// Provide buffer to write to
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
 			void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, frame.size, GL_MAP_WRITE_BIT);
 			//GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
 			if (ptr) {
-			memcpy(ptr, frame.data, frame.size);
-			stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
-			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+				memcpy(ptr, ptr_frame->data, ptr_frame->size);
+				stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
+				glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			}
 			else {
 				std::cout << "still error" << std::endl;
@@ -1445,7 +1471,6 @@ int main(int argc, char **argv)
 			//memcpy(&iter->map[0],addr,plane.length);
 			//std::cout << "copied" << std::endl;
 			//std::cout << rtn << std::endl;
-			free(frame.data);
 			once++;
 		}
 
