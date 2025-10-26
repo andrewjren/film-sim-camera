@@ -110,11 +110,11 @@ private:
     //std::queue<FrameData> queue;
     std::pair<bool, std::unique_ptr<FrameData>> frame_data; // <data available, pointer to data>
     std::mutex mutex;
-    std::condition_variable cv;
+    //std::condition_variable cv;
 
 public:
     void update(FrameData* frame_ptr, size_t len) {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock<std::mutex> lock(mutex);
         frame.second.reset();
         memcpy(frame.second->data, frame_ptr, len);
         frame.second->size = len;
@@ -145,7 +145,7 @@ public:
    }
 
    void swap_buffers(std::unique_ptr<FrameData> ptr_in) {
-       std::lock_guard<std::mutex> lock(mutex);
+       std::unique_lock<std::mutex> lock(mutex);
        frame_data.first = false; // processed this data
        frame_data.second.swap(ptr_in);
    }
@@ -607,47 +607,52 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 
 static void requestComplete(libcamera::Request *request)
 {
-    eglMakeCurrent(display, surface, surface, context);
-    // Code to follow
+    //eglMakeCurrent(display, surface, surface, context);
+    
     if (request->status() == libcamera::Request::RequestCancelled)
-    return;
+    	return;
 
-    struct modeset_dev* iter;
+    //struct modeset_dev* iter;
     const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
         libcamera::FrameBuffer *buffer = bufferPair.second;
         const libcamera::FrameMetadata &metadata = buffer->metadata();
 
-    unsigned int nplane = 0;
-    for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
-    {
-        std::cout << plane.bytesused;
-        if (++nplane < metadata.planes().size()) std::cout << "/";
-    }
+        unsigned int nplane = 0;
+		for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
+		{
+			std::cout << plane.bytesused;
+			if (++nplane < metadata.planes().size()) 
+				std::cout << "/";
+		}
 
-    for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
-        if (!plane.fd.isValid())
-        {
-            break;
-        }
-        int fd = plane.fd.get();
-        unsigned char * addr = (unsigned char *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (addr == MAP_FAILED) {
-                std::cout << "Map Failed" << std::endl;
-        }
-        for (iter = modeset_list; iter; iter = iter->next) {
-            std::cout << "plane length: " << plane.length << std::endl;
+		for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
+			if (!plane.fd.isValid()) {
+				break;
+			}
+			int fd = plane.fd.get();
 
-            frame_manager.update(addr, plane.length);
+			// TODO: permanent mmap? 
+			unsigned char * addr = (unsigned char *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
+			if (addr == MAP_FAILED) {
+					std::cout << "Map Failed" << std::endl;
+			}
 
-        }
-        //munmap(addr, plane.length);
-    }
-    std::cout << std::endl;
+			frame_manager.update(addr, plane.length);
+			/*
+			for (iter = modeset_list; iter; iter = iter->next) {
+				std::cout << "plane length: " << plane.length << std::endl;
 
-       request->reuse(libcamera::Request::ReuseBuffers);
-    //camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+				frame_manager.update(addr, plane.length);
+
+			}*/
+			//munmap(addr, plane.length); 
+		}
+		std::cout << std::endl;
+
+		request->reuse(libcamera::Request::ReuseBuffers);
+		//camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -1051,8 +1056,7 @@ int main(int argc, char **argv)
 
     if (!eglChooseConfig(display, configAttribs, configs, count, &numConfigs))
     {
-        fprintf(stderr, "Failed to get EGL configs! Error: %s\n",
-                eglGetErrorStr());
+        fprintf(stderr, "Failed to get EGL configs! Error: %s\n", eglGetErrorStr());
         eglTerminate(display);
         gbmClean();
         return EXIT_FAILURE;
@@ -1063,16 +1067,14 @@ int main(int argc, char **argv)
     int configIndex = matchConfigToVisual(display, GBM_FORMAT_XRGB8888, configs, numConfigs);
     if (configIndex < 0)
     {
-        fprintf(stderr, "Failed to find matching EGL config! Error: %s\n",
-                eglGetErrorStr());
+        fprintf(stderr, "Failed to find matching EGL config! Error: %s\n", eglGetErrorStr());
         eglTerminate(display);
         gbm_surface_destroy(gbmSurface);
         gbm_device_destroy(gbmDevice);
         return EXIT_FAILURE;
     }
 
-    context =
-        eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
+    context = eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
     if (context == EGL_NO_CONTEXT)
     {
         fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
@@ -1081,12 +1083,10 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    surface =
-        eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
+    surface = eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
     if (surface == EGL_NO_SURFACE)
     {
-        fprintf(stderr, "Failed to create EGL surface! Error: %s\n",
-                eglGetErrorStr());
+        fprintf(stderr, "Failed to create EGL surface! Error: %s\n", eglGetErrorStr());
         eglDestroyContext(display, context);
         eglTerminate(display);
         gbmClean();
@@ -1250,25 +1250,28 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dstTex, 0);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        switch(glCheckFramebufferStatus(GL_FRAMEBUFFER))
-        {
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        switch(glCheckFramebufferStatus(GL_FRAMEBUFFER)) {
+
         case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
         // Attached image has width/height of 0
         std::cout << "incomplete" << std::endl;
         break;
-    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+		
+    	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
         // No images attached to FBO
-    std::cout << "missing attachemnt" << std::endl;
+    	std::cout << "missing attachemnt" << std::endl;
         break;
-    case GL_FRAMEBUFFER_UNSUPPORTED:
+
+    	case GL_FRAMEBUFFER_UNSUPPORTED:
         // Format combination not supported
-    std::cout << "unsupported" << std::endl;
+    	std::cout << "unsupported" << std::endl;
         break;
-    default:
+
+    	default:
         printf("Unknown framebuffer error: 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
         }
+
         return 0;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1327,9 +1330,11 @@ int main(int argc, char **argv)
     for (std::unique_ptr<libcamera::Request> &request : requests)
        camera->queueRequest(request.get());
     
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    //std::this_thread::sleep_for(std::chrono::seconds(1));
     int once = 0;
     std::unique_ptr<FrameData> ptr_frame;
+	struct modeset_dev* iter;
+
     while(once < 10) {
         //FrameData frame; 
         
@@ -1343,11 +1348,11 @@ int main(int argc, char **argv)
             //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
             if (ptr) {
                 memcpy(ptr, ptr_frame->data, ptr_frame->size);
-                stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
+                stbi_write_png("debug-camera.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually r
                 glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
             }
             else {
-                std::cout << "still error" << std::endl;
+                std::cout << "camera ptr error" << std::endl;
             }
             std::cout << "input pbo mapped: " << ptr << std::endl;
 
@@ -1377,13 +1382,40 @@ int main(int argc, char **argv)
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
 
-            // Get data out of buffer
-            std::vector<unsigned char> pixels(test_width*test_height* 4);
-            memcpy(pixels.data(), ptr, test_width * test_height * 4);
-            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+			std::vector<unsigned char> full_frame(test_width*test_height* 4);
+			std::vector<unsigned char> drm_preview(640*480*4);
+			if (ptr) {
+				// Get data out of buffer
+				memcpy(full_frame.data(), ptr, test_width * test_height * 4);
+				stbi_write_png("debug-output.png", test_width, test_height, 4, full_frame.data, test_width*4);
+				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+			}
+			else {
+				std::cout << "full frame pointer fail" << std::endl;
+			}
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+			// Read Framebuffer for DRM preview
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+            glReadPixels(0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
+
+			if (ptr) {
+				// write to DRM display
+				for (iter = modeset_list; iter; iter = iter->next) {
+					memcpy(&iter->map[0],ptr,640*480*4);
+				}
+				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+			}
+			else {
+				std::cout << "drm pointer fail" << std::endl;
+			}
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            
 
             //stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
-            std::cout << "Written" << std::endl;
+            //std::cout << "Written" << std::endl;
             //memcpy(&iter->map[0],pixels.data(),pixels.size());
 
             // debug, try to write to png first 
@@ -1393,6 +1425,8 @@ int main(int argc, char **argv)
             //std::cout << "copied" << std::endl;
             //std::cout << rtn << std::endl;
             once++;
+			
+			
         }
 
     }
