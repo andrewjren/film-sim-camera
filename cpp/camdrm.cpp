@@ -111,7 +111,7 @@ struct FrameData {
 class FrameManager {
 private:
     //std::queue<FrameData> queue;
-    std::pair<bool, std::vector<uint8_t> frame_data; // <data available, pointer to data>
+    std::pair<bool, std::vector<uint8_t>> frame_data; // <data available, pointer to data>
     std::mutex mutex;
     //std::condition_variable cv;
 
@@ -600,7 +600,7 @@ static void requestComplete(libcamera::Request *request)
     if (request->status() == libcamera::Request::RequestCancelled)
     	return;
 
-    //struct modeset_dev* iter;
+    struct modeset_dev* iter;
     const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
@@ -622,7 +622,7 @@ static void requestComplete(libcamera::Request *request)
 			int fd = plane.fd.get();
 
 			// TODO: permanent mmap? 
-			unsigned char * addr = (unsigned char *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
+			uint8_t * addr = (uint8_t *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
 			if (addr == MAP_FAILED) {
 					std::cout << "Map Failed" << std::endl;
 			}
@@ -634,14 +634,21 @@ static void requestComplete(libcamera::Request *request)
 
 
 			frame_manager.update(addr, plane.length);
-			/*
-			for (iter = modeset_list; iter; iter = iter->next) {
+			std::vector<uint8_t> pixels(plane.length);
+			memcpy(pixels.data(),addr,plane.length);
+			std::cout << int(pixels[0]) << int(pixels[1]) << int(pixels[2]) << std::endl;
+			//std::cout << "pixels size: " << pixels.size() << ", plane length: " <<plane.length << std::endl;
+			//memcpy(pixels.data(),addr,plane.length);
+			//stbi_write_png("debug-in-loop.png", 2592, 1944, 4, pixels.data(), 2592*4);
+			
+			/*for (iter = modeset_list; iter; iter = iter->next) {
 				std::cout << "plane length: " << plane.length << std::endl;
 
-				frame_manager.update(addr, plane.length);
+				//frame_manager.update(addr, plane.length);
+				memcpy(&iter->map[0],addr,plane.length);
 
 			}*/
-			//munmap(addr, plane.length); 
+			munmap(addr, plane.length); 
 		}
 		std::cout << std::endl;
 
@@ -916,8 +923,8 @@ int main(int argc, char **argv)
     std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
     libcamera::StreamConfiguration &streamConfig = config->at(0);
     std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-    streamConfig.size.width = 2592;
-    streamConfig.size.height = 1944;
+    streamConfig.size.width = 1296;
+    streamConfig.size.height = 972;
     config->validate();
     std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
     camera->configure(config.get());
@@ -1032,10 +1039,10 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     // We will use the screen resolution as the desired width and height for the viewport.
-    int desiredWidth = 2592;
-    int desiredHeight = 1944;
-    int test_width = 2592;
-    int test_height = 1944;
+    int desiredWidth = 1296;
+    int desiredHeight = 972;
+    int test_width = 1296;
+    int test_height = 972;
 
 
     // Make sure that we can use OpenGL in this EGL app.
@@ -1327,7 +1334,7 @@ int main(int argc, char **argv)
     //std::this_thread::sleep_for(std::chrono::seconds(1));
     int once = 0;
     std::vector<uint8_t> vec_frame;
-	vec_frame.resize(test_width * test_height);
+	vec_frame.resize(test_width * test_height * 4);
 
     while(once < 10) {
         //FrameData frame; 
@@ -1335,6 +1342,7 @@ int main(int argc, char **argv)
         if (frame_manager.data_available()) {
             // get data 
             frame_manager.swap_buffers(vec_frame);
+	    std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 	    
 	    //test
 	    stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
@@ -1402,7 +1410,7 @@ int main(int argc, char **argv)
 			if (ptr) {
 				// write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
-					memcpy(&iter->map[0],ptr,640*480*4);
+					//memcpy(&iter->map[0],ptr,640*480*4);
 				}
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
