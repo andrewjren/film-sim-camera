@@ -97,10 +97,13 @@ float quad[] = {
   1,  1, 1, 1,
   -1,  1, 0, 1
 };
+
+/*
 struct FrameData {
-    void* data;
+    std::vector<unsigned char> data;
     size_t size;
 };
+*/
 
 /* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
    frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 
@@ -108,48 +111,32 @@ struct FrameData {
 class FrameManager {
 private:
     //std::queue<FrameData> queue;
-    std::pair<bool, std::shared_ptr<FrameData>> frame_data; // <data available, pointer to data>
+    std::pair<bool, std::vector<uint8_t> frame_data; // <data available, pointer to data>
     std::mutex mutex;
     //std::condition_variable cv;
 
 public:
-    void update(FrameData frame_ptr) {
+    void update(const void* ptr, size_t size) {
         std::unique_lock<std::mutex> lock(mutex);
-        frame_data.second.reset();
-        //memcpy(frame_data.second->data, frame_ptr, len);
-        //frame_data.second->size = len;
-	frame_data.second = std::make_shared<FrameData>(frame_ptr);
-        frame_data.first = true; // 
-        //queue.push(frame);
-        //cv.notify_one();
+
+		if (frame_data.second.size() != size) {
+			frame_data.second.resize(size);
+		}
+
+		memcpy(frame_data.second.data(), ptr, size);
+        frame_data.first = true; // indicate that new data is available
     }
-/*
-    FrameData pop() {
+
+    bool data_available() {
         std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [this]{ return !queue.empty(); });
-        FrameData frame = queue.front();
-        queue.pop();
-        return frame;
+        return frame_data.first;
     }
-*/
-    /*bool tryPop(FrameData& frame) {
-        std::lock_guard<std::mutex> lock(mutex);
-        if (queue.empty()) return false;
-        frame = queue.front();
-        queue.pop();
-        return true;
-    }*/
 
-   bool data_available() {
-       std::unique_lock<std::mutex> lock(mutex);
-       return frame_data.first;
-   }
-
-   void swap_buffers(std::shared_ptr<FrameData> ptr_in) {
-       std::unique_lock<std::mutex> lock(mutex);
-       frame_data.first = false; // processed this data
-       frame_data.second.swap(ptr_in);
-   }
+    void swap_buffers(std::vector<uint8_t> vector_in) {
+        std::unique_lock<std::mutex> lock(mutex);
+        frame_data.first = false; // processed this data
+        frame_data.second.swap(vector_in);
+    }
 };
 
 //FrameQueue frameQueue;
@@ -640,13 +627,13 @@ static void requestComplete(libcamera::Request *request)
 					std::cout << "Map Failed" << std::endl;
 			}
 
-			FrameData new_frame;
-			new_frame.data = malloc(plane.length);
-			memcpy(new_frame.data, addr, plane.length);
-			new_frame.size = plane.length;
+			//FrameData new_frame;
+			//new_frame.data = malloc(plane.length);
+			//memcpy(new_frame.data, addr, plane.length);
+			//new_frame.size = plane.length;
 
 
-			frame_manager.update(new_frame);
+			frame_manager.update(addr, plane.length);
 			/*
 			for (iter = modeset_list; iter; iter = iter->next) {
 				std::cout << "plane length: " << plane.length << std::endl;
@@ -1339,26 +1326,27 @@ int main(int argc, char **argv)
     
     //std::this_thread::sleep_for(std::chrono::seconds(1));
     int once = 0;
-    std::shared_ptr<FrameData> ptr_frame = std::make_shared<FrameData>();
+    std::vector<uint8_t> vec_frame;
+	vec_frame.resize(test_width * test_height);
 
     while(once < 10) {
         //FrameData frame; 
         
         if (frame_manager.data_available()) {
             // get data 
-            frame_manager.swap_buffers(ptr_frame);
+            frame_manager.swap_buffers(vec_frame);
 	    
 	    //test
-	    stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, ptr_frame->data, test_width*4);
+	    stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
 	    return 0;
 
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, ptr_frame->size, GL_MAP_WRITE_BIT);
+            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT);
             //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
             if (ptr) {
-                memcpy(ptr, ptr_frame->data, ptr_frame->size);
-                stbi_write_png("debug-camera.png", test_width, test_height, 4, ptr_frame->data, test_width*4); // just make sure camera is actually r
+                memcpy(ptr, vec_frame.data(), vec_frame.size());
+                stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
                 glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
             }
             else {
