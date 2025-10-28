@@ -132,7 +132,7 @@ public:
         return frame_data.first;
     }
 
-    void swap_buffers(std::vector<uint8_t> vector_in) {
+    void swap_buffers(std::vector<uint8_t> &vector_in) {
         std::unique_lock<std::mutex> lock(mutex);
         frame_data.first = false; // processed this data
         frame_data.second.swap(vector_in);
@@ -610,7 +610,7 @@ static void requestComplete(libcamera::Request *request)
         unsigned int nplane = 0;
 		for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
 		{
-			std::cout << plane.bytesused;
+			//std::cout << plane.bytesused;
 			if (++nplane < metadata.planes().size()) 
 				std::cout << "/";
 		}
@@ -634,9 +634,9 @@ static void requestComplete(libcamera::Request *request)
 
 
 			frame_manager.update(addr, plane.length);
-			std::vector<uint8_t> pixels(plane.length);
-			memcpy(pixels.data(),addr,plane.length);
-			std::cout << int(pixels[0]) << int(pixels[1]) << int(pixels[2]) << std::endl;
+			//std::vector<uint8_t> pixels(plane.length);
+			//memcpy(pixels.data(),addr,plane.length);
+			//std::cout << "vector: " << int(pixels[0]) << ',' << int(pixels[1]) << ',' << int(pixels[2]);
 			//std::cout << "pixels size: " << pixels.size() << ", plane length: " <<plane.length << std::endl;
 			//memcpy(pixels.data(),addr,plane.length);
 			//stbi_write_png("debug-in-loop.png", 2592, 1944, 4, pixels.data(), 2592*4);
@@ -648,12 +648,12 @@ static void requestComplete(libcamera::Request *request)
 				memcpy(&iter->map[0],addr,plane.length);
 
 			}*/
-			munmap(addr, plane.length); 
+			//munmap(addr, plane.length); 
 		}
-		std::cout << std::endl;
+		//std::cout << std::endl;
 
 		request->reuse(libcamera::Request::ReuseBuffers);
-		//camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+		camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
     }
 }
 
@@ -1331,12 +1331,12 @@ int main(int argc, char **argv)
     for (std::unique_ptr<libcamera::Request> &request : requests)
        camera->queueRequest(request.get());
     
-    //std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
 
-    while(once < 10) {
+    while(once < 1000) {
         //FrameData frame; 
         
         if (frame_manager.data_available()) {
@@ -1345,8 +1345,7 @@ int main(int argc, char **argv)
 	    std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 	    
 	    //test
-	    stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
-	    return 0;
+	    //stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
 
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
@@ -1354,7 +1353,7 @@ int main(int argc, char **argv)
             //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
             if (ptr) {
                 memcpy(ptr, vec_frame.data(), vec_frame.size());
-                stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
+                //stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
                 glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
             }
             else {
@@ -1393,7 +1392,7 @@ int main(int argc, char **argv)
 			if (ptr) {
 				// Get data out of buffer
 				memcpy(full_frame.data(), ptr, test_width * test_height * 4);
-				stbi_write_png("debug-output.png", test_width, test_height, 4, full_frame.data(), test_width*4);
+				//stbi_write_png("debug-output.png", test_width, test_height, 4, full_frame.data(), test_width*4);
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
 			else {
@@ -1403,14 +1402,14 @@ int main(int argc, char **argv)
 
 			// Read Framebuffer for DRM preview
             glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-            glReadPixels(0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
 
 			if (ptr) {
 				// write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
-					//memcpy(&iter->map[0],ptr,640*480*4);
+					memcpy(&iter->map[0],ptr,640*480*4);
 				}
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
