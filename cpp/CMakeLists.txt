@@ -10,6 +10,7 @@ pkg_check_modules(GBM REQUIRED gbm)
 
 find_package(OpenGL REQUIRED COMPONENTS EGL GLES2 GLES3)
 #ldrm -lgbm -lEGL -lGLESv2 -I/usr/include/libdrm -I/usr/include/GLES2
+find_package(glm CONFIG REQUIRED)
 
 message(STATUS "libcamera library found - version: ${LIBCAMERA_VERSION} - libraries: ${LIBCAMERA_LINK_LIBRARIES} - include path: ${LIBCAMERA_INCLUDE_DIRS}")
 message(STATUS "libdrm library found - version: ${DRM_VERSION} - libraries: ${DRM_LINK_LIBRARIES} - include path: ${DRM_INCLUDE_DIRS}")
@@ -41,5 +42,6 @@ target_link_libraries(camdrm PRIVATE
   OpenGL::OpenGL 
   OpenGL::EGL 
   OpenGL::GLES3
-  ${GBM_LINK_LIBRARIES})
+  ${GBM_LINK_LIBRARIES}
+  glm::glm-header-only)
 

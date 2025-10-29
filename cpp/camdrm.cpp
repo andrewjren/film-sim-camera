@@ -55,6 +55,9 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 static std::shared_ptr<libcamera::Camera> camera;
 
@@ -98,12 +101,8 @@ float quad[] = {
   -1,  1, 0, 1
 };
 
-/*
-struct FrameData {
-    std::vector<unsigned char> data;
-    size_t size;
-};
-*/
+const int screen_width = 640;
+const int screen_height = 480;
 
 /* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
    frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 
@@ -812,9 +811,10 @@ static const char *vertexShaderCode = R"(
 in vec2 aPos;
 in vec2 aTexCoord;
 out vec2 TexCoord;
+uniform mat4 transform;
 void main() {
+	gl_Position = transform * vec4(aPos, 0.0, 1.0);
     TexCoord = aTexCoord;
-    gl_Position = vec4(aPos, 0.0, 1.0);
 }
 )";
 
@@ -1117,6 +1117,12 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+	// Transformation Matrix
+	float scale = float(screen_width) / float(test_width);
+	glm::mat4 trans_mat = glm::mat4(1.0f);
+	trans_mat = glm::rotate(trans_mat, glm::radians(90.0f), glm::vec3(0.0, 0.0, 1.0));
+	trans_mat = glm::scale(trans_mat, glm::vec3(scale, scale, scale));
+
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
@@ -1239,6 +1245,9 @@ int main(int argc, char **argv)
     // Set uniforms
     glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
+
+	unsigned int trans_loc = glGetUniformLocation(program, "transform");
+	glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
 
     std::cout << "after setting uniforms: " << glGetError() << std::endl;
 
