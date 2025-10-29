@@ -1120,9 +1120,11 @@ int main(int argc, char **argv)
 	// Transformation Matrix
 	float scale = float(screen_width) / float(test_width);
 	glm::mat4 trans_mat = glm::mat4(1.0f);
-	trans_mat = glm::rotate(trans_mat, glm::radians(90.0f), glm::vec3(0.0, 0.0, 1.0));
-	trans_mat = glm::scale(trans_mat, glm::vec3(scale, scale, scale));
-
+	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
+	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
+	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
+	//trans_mat = glm::translate(trans_mat, glm::vec3(-1.0f, -0.0f, -0.0f));
+	
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
