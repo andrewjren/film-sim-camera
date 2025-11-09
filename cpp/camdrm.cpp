@@ -920,13 +920,18 @@ int main(int argc, char **argv)
  */
     camera->acquire();
 
-    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
+    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
     libcamera::StreamConfiguration &streamConfig = config->at(0);
     std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
     streamConfig.size.width = 1296;
     streamConfig.size.height = 972;
+	libcamera::StreamConfiguration &captureConfig = config->at(1);
+	std::cout << "Default viewfinder configuration is: " << captureConfig.toString() << std::endl;
+	captureConfig.size.width = 1296;
+	captureConfig.size.height = 972;
     config->validate();
     std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
+	std::cout << "Validated capture config is: " << captureConfig.toString() << std::endl;
     camera->configure(config.get());
 
     libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
