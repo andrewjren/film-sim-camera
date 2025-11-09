@@ -651,8 +651,8 @@ static void requestComplete(libcamera::Request *request)
 			// Switch back to viewfinder after delay
 			std::thread([&]() {
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				cameraController.configureForViewfinder();
-				cameraController.startCapture();
+				//cameraController.configureForViewfinder();
+				//cameraController.startCapture();
 			}).detach();
 		}
     }
