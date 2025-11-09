@@ -93,6 +93,13 @@ static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
 
+enum CaptureMode{
+	eViewfinder,
+	eStillCapture
+};
+
+CaptureMode capture_mode;
+
 // Setup full screen quad
 float quad[] = {
   -1, -1, 0, 0,
@@ -609,7 +616,6 @@ static void requestComplete(libcamera::Request *request)
         unsigned int nplane = 0;
 		for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
 		{
-			//std::cout << plane.bytesused;
 			if (++nplane < metadata.planes().size()) 
 				std::cout << "/";
 		}
@@ -626,33 +632,29 @@ static void requestComplete(libcamera::Request *request)
 					std::cout << "Map Failed" << std::endl;
 			}
 
-			//FrameData new_frame;
-			//new_frame.data = malloc(plane.length);
-			//memcpy(new_frame.data, addr, plane.length);
-			//new_frame.size = plane.length;
+			if (capture_mode == eViewfinder)
+				frame_manager.update(addr, plane.length);
+			//else if (capture_mode == eStillCapture)
+				
 
-
-			frame_manager.update(addr, plane.length);
-			//std::vector<uint8_t> pixels(plane.length);
-			//memcpy(pixels.data(),addr,plane.length);
-			//std::cout << "vector: " << int(pixels[0]) << ',' << int(pixels[1]) << ',' << int(pixels[2]);
-			//std::cout << "pixels size: " << pixels.size() << ", plane length: " <<plane.length << std::endl;
-			//memcpy(pixels.data(),addr,plane.length);
-			//stbi_write_png("debug-in-loop.png", 2592, 1944, 4, pixels.data(), 2592*4);
-			
-			/*for (iter = modeset_list; iter; iter = iter->next) {
-				std::cout << "plane length: " << plane.length << std::endl;
-
-				//frame_manager.update(addr, plane.length);
-				memcpy(&iter->map[0],addr,plane.length);
-
-			}*/
-			//munmap(addr, plane.length); 
 		}
 		//std::cout << std::endl;
 
-		request->reuse(libcamera::Request::ReuseBuffers);
-		camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+		if (capture_mode == eViewfinder)
+		{
+			request->reuse(libcamera::Request::ReuseBuffers);
+			camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
+		}
+		else if (capture_mode == eStillCapture)
+		{
+			// DON'T requeue - single capture
+			// Switch back to viewfinder after delay
+			std::thread([&]() {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				cameraController.configureForViewfinder();
+				cameraController.startCapture();
+			}).detach();
+		}
     }
 }
 
