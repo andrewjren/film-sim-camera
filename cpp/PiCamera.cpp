@@ -2,6 +2,16 @@
 #include <cstdlib>
 #include <sys/mman.h>
 
+std::shared_ptr<libcamera::Camera> camera;
+std::unique_ptr<libcamera::CameraManager> camera_manager;
+std::vector<std::unique_ptr<libcamera::Request>> requests;
+libcamera::FrameBufferAllocator *allocator;
+std::unique_ptr<libcamera::CameraConfiguration> config;
+libcamera::Stream *stream;
+
+static CaptureMode capture_mode; 
+static std::shared_ptr<FrameManager> frame_manager;
+
 PiCamera::PiCamera() {
 }
 
