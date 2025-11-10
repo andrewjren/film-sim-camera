@@ -16,10 +16,12 @@ enum CaptureMode{
 class PiCamera {
     private:
 
-    static std::shared_ptr<libcamera::Camera> camera = nullptr;
-    static std::unique_ptr<libcamera::CameraManager> camera_manager = nullptr;
+    static std::shared_ptr<libcamera::Camera> camera;
+    static std::unique_ptr<libcamera::CameraManager> camera_manager;
     static std::vector<std::unique_ptr<libcamera::Request>> requests;
-    static libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
+    static libcamera::FrameBufferAllocator *allocator;
+    static std::unique_ptr<libcamera::CameraConfiguration> config;
+    static libcamera::Stream *stream;
 
     PiCamera();
 
@@ -28,8 +30,8 @@ class PiCamera {
 
     public:
 
-    static CaptureMode capture_mode = eViewfinder; 
-    static std::shared_ptr<FrameManager> frame_manager = nullptr;
+    static CaptureMode capture_mode; 
+    static std::shared_ptr<FrameManager> frame_manager;
     
     static void Initialize();
     static void AllocateBuffers();
@@ -37,6 +39,7 @@ class PiCamera {
     static void ConfigureViewfinder();
     static void ConfigureStillCapture();
     static void StartCamera();
+    static void SetFrameManager(std::shared_ptr<FrameManager>);
     static void Cleanup();
 };
 

@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <iostream>
 //#include <iomanip>
 #include <memory>
 #include <thread>
@@ -58,8 +59,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <PiCamera.hpp>
+#include <FrameManager.hpp>
 
-static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
 static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn, struct modeset_dev *dev);
@@ -808,8 +810,8 @@ int main(int argc, char **argv)
 
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-	PiCamera.Initialize();
-	PiCamera.frame_manager = frame_manager;
+	PiCamera::Initialize();
+	PiCamera::SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
     if (argc > 1)
@@ -1170,7 +1172,7 @@ int main(int argc, char **argv)
     std::cout << "Saved color-corrected image to output.png\n";
 */
 
-	PiCamera.StartCamera();
+	PiCamera::StartCamera();
     
     std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;
