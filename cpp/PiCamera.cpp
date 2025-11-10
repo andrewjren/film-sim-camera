@@ -38,7 +38,7 @@ void PiCamera::Initialize() {
     allocator = new libcamera::FrameBufferAllocator(camera);
 
     ConfigureViewfinder();
-    ConfigureStillCapture();
+    //ConfigureStillCapture();
     AllocateBuffers();
 
     camera->requestCompleted.connect(requestComplete);
