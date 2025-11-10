@@ -9,8 +9,8 @@ libcamera::FrameBufferAllocator *PiCamera::allocator;
 std::unique_ptr<libcamera::CameraConfiguration> PiCamera::config;
 libcamera::Stream *PiCamera::stream;
 
-static CaptureMode PiCamera::capture_mode; 
-static std::shared_ptr<FrameManager> PiCamera::frame_manager;
+CaptureMode PiCamera::capture_mode; 
+std::shared_ptr<FrameManager> PiCamera::frame_manager;
 
 PiCamera::PiCamera() {
 }
