@@ -39,10 +39,10 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <iomanip>
+//#include <iomanip>
 #include <memory>
 #include <thread>
-#include <libcamera/libcamera.h>
+//#include <libcamera/libcamera.h>
 #include <gbm.h>
 #include <EGL/egl.h>
 //#include <GLES2/gl2.h>
@@ -93,13 +93,14 @@ static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
 
+/*
 enum CaptureMode{
 	eViewfinder,
 	eStillCapture
 };
 
 CaptureMode capture_mode;
-
+*/
 // Setup full screen quad
 float quad[] = {
   -1, -1, 0, 0,
@@ -111,42 +112,8 @@ float quad[] = {
 const int screen_width = 640;
 const int screen_height = 480;
 
-/* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
-   frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 
-   preview DRM window */
-class FrameManager {
-private:
-    //std::queue<FrameData> queue;
-    std::pair<bool, std::vector<uint8_t>> frame_data; // <data available, pointer to data>
-    std::mutex mutex;
-    //std::condition_variable cv;
-
-public:
-    void update(const void* ptr, size_t size) {
-        std::unique_lock<std::mutex> lock(mutex);
-
-		if (frame_data.second.size() != size) {
-			frame_data.second.resize(size);
-		}
-
-		memcpy(frame_data.second.data(), ptr, size);
-        frame_data.first = true; // indicate that new data is available
-    }
-
-    bool data_available() {
-        std::unique_lock<std::mutex> lock(mutex);
-        return frame_data.first;
-    }
-
-    void swap_buffers(std::vector<uint8_t> &vector_in) {
-        std::unique_lock<std::mutex> lock(mutex);
-        frame_data.first = false; // processed this data
-        frame_data.second.swap(vector_in);
-    }
-};
-
 //FrameQueue frameQueue;
-FrameManager frame_manager;
+//FrameManager frame_manager;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -599,65 +566,6 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
     return 0;
 }
 
-static void requestComplete(libcamera::Request *request)
-{
-    //eglMakeCurrent(display, surface, surface, context);
-    
-    if (request->status() == libcamera::Request::RequestCancelled)
-    	return;
-
-    struct modeset_dev* iter;
-    const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
-
-    for (auto bufferPair : buffers) {
-        libcamera::FrameBuffer *buffer = bufferPair.second;
-        const libcamera::FrameMetadata &metadata = buffer->metadata();
-
-        unsigned int nplane = 0;
-		for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
-		{
-			if (++nplane < metadata.planes().size()) 
-				std::cout << "/";
-		}
-
-		for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
-			if (!plane.fd.isValid()) {
-				break;
-			}
-			int fd = plane.fd.get();
-
-			// TODO: permanent mmap? 
-			uint8_t * addr = (uint8_t *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
-			if (addr == MAP_FAILED) {
-					std::cout << "Map Failed" << std::endl;
-			}
-
-			if (capture_mode == eViewfinder)
-				frame_manager.update(addr, plane.length);
-			//else if (capture_mode == eStillCapture)
-				
-
-		}
-		//std::cout << std::endl;
-
-		if (capture_mode == eViewfinder)
-		{
-			request->reuse(libcamera::Request::ReuseBuffers);
-			camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
-		}
-		else if (capture_mode == eStillCapture)
-		{
-			// DON'T requeue - single capture
-			// Switch back to viewfinder after delay
-			std::thread([&]() {
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				//cameraController.configureForViewfinder();
-				//cameraController.startCapture();
-			}).detach();
-		}
-    }
-}
-
 static drmModeConnector *getConnector(drmModeRes *resources)
 {
     for (int i = 0; i < resources->count_connectors; i++)
@@ -898,84 +806,10 @@ int main(int argc, char **argv)
     struct modeset_dev *iter;
     //EGLDisplay display;
 
-    /* try to open camera */
-    std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
-    cm->start();
-    
-    for (auto const &camera : cm->cameras())
-        std::cout << camera->id() << std::endl;
+	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-    auto cameras = cm->cameras();
-    if (cameras.empty()) {
-        std::cout << "No cameras were identified on the system." << std::endl;
-        cm->stop();
-        return EXIT_FAILURE;
-    }
-
-    std::string cameraId = cameras[0]->id();
-
-    camera = cm->get(cameraId);
-/*
- * Note that `camera` may not compare equal to `cameras[0]`.
- * In fact, it might simply be a `nullptr`, as the particular
- * device might have disappeared (and reappeared) in the meantime.
- */
-    camera->acquire();
-
-    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
-    libcamera::StreamConfiguration &streamConfig = config->at(0);
-    std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-    streamConfig.size.width = 1296;
-    streamConfig.size.height = 972;
-	libcamera::StreamConfiguration &captureConfig = config->at(1);
-	std::cout << "Default viewfinder configuration is: " << captureConfig.toString() << std::endl;
-	captureConfig.size.width = 1296;
-	captureConfig.size.height = 972;
-    config->validate();
-    std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	std::cout << "Validated capture config is: " << captureConfig.toString() << std::endl;
-    camera->configure(config.get());
-
-    libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
-
-    for (libcamera::StreamConfiguration &cfg : *config) {
-        int ret = allocator->allocate(cfg.stream());
-        if (ret < 0) {
-            std::cerr << "Can't allocate buffers" << std::endl;
-            return -ENOMEM;
-        }
-
-        size_t allocated = allocator->buffers(cfg.stream()).size();
-        std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
-    }
-
-    libcamera::Stream *stream = streamConfig.stream();
-    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
-    std::vector<std::unique_ptr<libcamera::Request>> requests;
-
-    for (unsigned int i = 0; i < buffers.size(); ++i) {
-        std::unique_ptr<libcamera::Request> request = camera->createRequest();
-        if (!request)
-        {
-            std::cerr << "Can't create request" << std::endl;
-            return -ENOMEM;
-        }
-
-        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-        int ret = request->addBuffer(stream, buffer.get());
-        if (ret < 0)
-        {
-              std::cerr << "Can't set buffer for request"
-                  << std::endl;
-            return ret;
-        }
-
-        requests.push_back(std::move(request));
-    }
-    camera->requestCompleted.connect(requestComplete);
-    //camera->start();
-    //for (std::unique_ptr<libcamera::Request> &request : requests)
-    //   camera->queueRequest(request.get());
+	PiCamera.Initialize();
+	PiCamera.frame_manager = frame_manager;
 
     /* check which DRM device to open */
     if (argc > 1)
@@ -1173,19 +1007,6 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    
-    // load test image  
-    //int test_width, test_height, test_nrChannels;
-    /*
-    unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
-    if (!test_data)
-    {
-        std::cout << "Failed to load texture" << std::endl;
-        return 0;
-    }
-    stbi_image_free(test_data);
-    */
-
     size_t image_size = test_width * test_height * 4; // RGBA
 
     std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
@@ -1348,9 +1169,8 @@ int main(int argc, char **argv)
     stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
     std::cout << "Saved color-corrected image to output.png\n";
 */
-    camera->start();
-    for (std::unique_ptr<libcamera::Request> &request : requests)
-       camera->queueRequest(request.get());
+
+	PiCamera.StartCamera();
     
     std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;
@@ -1360,9 +1180,9 @@ int main(int argc, char **argv)
     while(once < 1000) {
         //FrameData frame; 
         
-        if (frame_manager.data_available()) {
+        if (frame_manager->data_available()) {
             // get data 
-            frame_manager.swap_buffers(vec_frame);
+            frame_manager->swap_buffers(vec_frame);
 	    std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 	    
 	    //test
@@ -1438,18 +1258,6 @@ int main(int argc, char **argv)
 				std::cout << "drm pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            
-
-            //stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
-            //std::cout << "Written" << std::endl;
-            //memcpy(&iter->map[0],pixels.data(),pixels.size());
-
-            // debug, try to write to png first 
-            //stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
-            //std::cout << "Debug saved image to debug.png\n";
-            //memcpy(&iter->map[0],addr,plane.length);
-            //std::cout << "copied" << std::endl;
-            //std::cout << rtn << std::endl;
             once++;
 			
 			
@@ -1459,14 +1267,6 @@ int main(int argc, char **argv)
 
     /* cleanup everything */
     modeset_cleanup(fd);
-
-    camera->stop();
-    allocator->free(stream);
-    delete allocator;
-    camera->release();
-    camera.reset();
-    cm->stop();
-
 
     ret = 0;
 

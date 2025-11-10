@@ -1,0 +1,157 @@
+#include <PiCamera.hpp>
+
+PiCamera::PiCamera() {
+}
+
+static void PiCamera::Initialize() {
+    camera_manager = std::make_unique<libcamera::CameraManager>();
+    camera_manager->start();
+
+    for (auto const &camera : camera_manager->cameras())
+        std::cout << camera->id() << std::endl;
+
+    auto cameras = camera_manager->cameras();
+    if (cameras.empty()) {
+        std::cout << "No cameras were identified on the system." << std::endl;
+        cm->stop();
+        return EXIT_FAILURE;
+    }
+
+    std::string cameraId = cameras[0]->id();
+
+    camera = camera_manager->get(cameraId);
+    camera->acquire();
+
+    ConfigureViewfinder();
+    ConfigureStillCapture();
+    AllocateBuffers();
+
+    camera->requestCompleted.connect(requestComplete);
+}
+
+static void PiCamera::AllocateBuffers() {
+
+    for (libcamera::StreamConfiguration &cfg : *config) {
+        int ret = allocator->allocate(cfg.stream());
+        if (ret < 0) {
+            std::cerr << "Can't allocate buffers" << std::endl;
+            return -ENOMEM;
+        }
+
+        size_t allocated = allocator->buffers(cfg.stream()).size();
+        std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
+    }
+
+    libcamera::Stream *stream = streamConfig.stream();
+    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
+
+    for (unsigned int i = 0; i < buffers.size(); ++i) {
+        std::unique_ptr<libcamera::Request> request = camera->createRequest();
+        if (!request)
+        {
+            std::cerr << "Can't create request" << std::endl;
+            return -ENOMEM;
+        }
+
+        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
+        int ret = request->addBuffer(stream, buffer.get());
+        if (ret < 0)
+        {
+            std::cerr << "Can't set buffer for request"
+                << std::endl;
+            return ret;
+        }
+
+        requests.push_back(std::move(request));
+    }
+}
+
+static void PiCamera::requestComplete(libcamera::Request *request)
+{
+    if (request->status() == libcamera::Request::RequestCancelled)
+        return;
+
+    const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
+
+    for (auto bufferPair : buffers) {
+        libcamera::FrameBuffer *buffer = bufferPair.second;
+        const libcamera::FrameMetadata &metadata = buffer->metadata();
+
+        for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
+            if (!plane.fd.isValid()) {
+                break;
+            }
+            int fd = plane.fd.get();
+
+            // TODO: permanent mmap? 
+            uint8_t * addr = (uint8_t *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
+            if (addr == MAP_FAILED) {
+                std::cout << "Map Failed" << std::endl;
+            }
+
+            if (capture_mode == eViewfinder)
+                frame_manager.update(addr, plane.length);
+        }
+
+        if (capture_mode == eViewfinder)
+        {
+            request->reuse(libcamera::Request::ReuseBuffers);
+            camera->queueRequest(request); // make request happen each time 
+        }
+        else if (capture_mode == eStillCapture)
+        {
+            // DON'T requeue - single capture
+            // Switch back to viewfinder after delay
+            std::thread([&]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                //cameraController.configureForViewfinder();
+                //cameraController.startCapture();
+            }).detach();
+        }
+    }
+}
+
+static std::shared_ptr<libcamera::Camera> PiCamera::GetCamera() {
+    if (camera == nullptr) {
+        Initialize();
+    }
+
+    return camera;
+}
+
+static void PiCamera::ConfigureViewfinder() { // TODO: pass in parameters?
+    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
+    
+    std::cout << "Default viewfinder configuration is: " << config->at(0).toString() << std::endl;
+    config->at(0).size.width = 1296;
+    config->at(0).size.height = 972;
+    config->validate();
+    std::cout << "Validated viewfinder configuration is: " << config->at(0).toString() << std::endl;
+    camera->configure(config.get());
+}
+
+static void PiCamera::ConfigureStillCapture() {
+    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::StillCapture } );
+
+    std::cout << "Default still capture configuration is: " << config->at(0).toString() << std::endl;
+    config->at(0).size.width = 1296;
+    config->at(0).size.height = 972;
+    config->validate();
+    std::cout << "Validated still capture configuration is: " << config->at(0).toString() << std::endl;
+    camera->configure(config.get());
+}
+
+static void PiCamera::StartCamera() {
+    camera->start();
+    for (std::unique_ptr<libcamera::Request> &request : requests)
+        camera->queueRequest(request.get());
+}
+
+static void PiCamera::Cleanup() {
+    camera->stop();
+    allocator->free(stream);
+    delete allocator;
+    camera->release();
+    camera.reset();
+    camera_manager->stop();
+}
