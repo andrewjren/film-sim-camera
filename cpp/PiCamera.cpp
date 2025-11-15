@@ -1,6 +1,7 @@
 #include <PiCamera.hpp>
 #include <cstdlib>
 #include <sys/mman.h>
+#include <linux/dma-buf.h>
 
 std::shared_ptr<libcamera::Camera> PiCamera::camera;
 std::unique_ptr<libcamera::CameraManager> PiCamera::camera_manager;
@@ -118,6 +119,19 @@ void PiCamera::requestComplete(libcamera::Request *request)
     if (request->status() == libcamera::Request::RequestCancelled)
         return;
 
+    struct dma_buf_sync dma_sync {};
+	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
+	for (auto const &buffer_map : request->buffers())
+	{
+		auto it = mapped_buffers.find(buffer_map.second);
+		if (it == mapped_buffers.end())
+			throw std::runtime_error("failed to identify request complete buffer");
+
+		int ret = ::ioctl(buffer_map.second->planes()[0].fd.get(), DMA_BUF_IOCTL_SYNC, &dma_sync);
+		if (ret)
+			throw std::runtime_error("failed to sync dma buf on request complete");
+	}
+/*
     const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
@@ -139,7 +153,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
             if (capture_mode == eViewfinder)
                 frame_manager->update(addr, plane.length);
         }
-
+*/
         if (capture_mode == eViewfinder)
         {
             request->reuse(libcamera::Request::ReuseBuffers);
@@ -155,7 +169,8 @@ void PiCamera::requestComplete(libcamera::Request *request)
                 //cameraController.startCapture();
             }).detach();
         }
-    }
+//    }
+    
 }
 
 std::shared_ptr<libcamera::Camera> PiCamera::GetCamera() {
