@@ -23,10 +23,10 @@ class PiCamera {
     static libcamera::FrameBufferAllocator *allocator;
     static std::unique_ptr<libcamera::CameraConfiguration> config;
     static libcamera::Stream *stream;
-    static std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers;
-    std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
-    std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
-    DmaHeap dma_heap_;
+    //static std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers;
+    static std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
+    static std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
+    static DmaHeap dma_heap_;
 
     PiCamera();
 
@@ -46,6 +46,7 @@ class PiCamera {
     static void StartCamera();
     static void SetFrameManager(std::shared_ptr<FrameManager>);
     static void Cleanup();
+    static void MapBuffers();
 };
 
 #endif // CPP_PICAMERA_HPP

@@ -12,6 +12,11 @@ libcamera::Stream *PiCamera::stream;
 CaptureMode PiCamera::capture_mode; 
 std::shared_ptr<FrameManager> PiCamera::frame_manager;
 
+//std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers;
+std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> PiCamera::mapped_buffers;
+std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> PiCamera::frame_buffers;
+DmaHeap PiCamera::dma_heap_;
+
 PiCamera::PiCamera() {
 }
 
@@ -82,13 +87,13 @@ void PiCamera::AllocateBuffers() {
 }
 
 void PiCamera::MapBuffers() {
-    for (StreamConfiguration &stream_config : *config) {
-        libcamera::Stream stream = stream_config->stream();
+    for (libcamera::StreamConfiguration &stream_config : *config) {
+        libcamera::Stream *stream = stream_config.stream();
         std::vector<std::unique_ptr<libcamera::FrameBuffer>> fb;
 
-        for (unsigned int i = 0; i < stream_config->bufferCount; i++) {
+        for (unsigned int i = 0; i < stream_config.bufferCount; i++) {
             std::string name("film-sim" + std::to_string(i));
-            libcamera::UniqueFD fd = dma_heap.alloc(name.c_str(), stream_config->frameSize);
+            libcamera::UniqueFD fd = dma_heap_.alloc(name.c_str(), stream_config.frameSize);
 
             if (!fd.isValid())
                 throw std::runtime_error("failed to allocate capture buffers for stream");
@@ -96,12 +101,12 @@ void PiCamera::MapBuffers() {
             std::vector<libcamera::FrameBuffer::Plane> plane(1);
             plane[0].fd = libcamera::SharedFD(std::move(fd));
             plane[0].offset = 0;
-            plane[0].length = stream_config->frameSize;
+            plane[0].length = stream_config.frameSize;
 
             fb.push_back(std::make_unique<libcamera::FrameBuffer>(plane));
-            void *memory = mmap(NULL, config->frameSize, PROT_READ | PROT_WRITE, MAP_SHARED, plane[0].fd.get(), 0);
+            void *memory = mmap(NULL, stream_config.frameSize, PROT_READ | PROT_WRITE, MAP_SHARED, plane[0].fd.get(), 0);
             mapped_buffers[fb.back().get()].push_back(
-                        libcamera::Span<uint8_t>(static_cast<uint8_t *>(memory), config->frameSize));
+                        libcamera::Span<uint8_t>(static_cast<uint8_t *>(memory), stream_config.frameSize));
         }
 
         frame_buffers[stream] = std::move(fb);
@@ -113,7 +118,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
     if (request->status() == libcamera::Request::RequestCancelled)
         return;
 
-    //const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
+    const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
         libcamera::FrameBuffer *buffer = bufferPair.second;

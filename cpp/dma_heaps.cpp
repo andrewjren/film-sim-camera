@@ -13,8 +13,9 @@
 #include <linux/dma-heap.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <vector>
 
-#include "core/logging.hpp"
+//#include "core/logging.hpp"
 
 DmaHeap::DmaHeap()
 {
@@ -32,7 +33,7 @@ DmaHeap::DmaHeap()
 		int ret = ::open(name, O_RDWR | O_CLOEXEC, 0);
 		if (ret < 0)
 		{
-			LOG(2, "Failed to open " << name << ": " << ret);
+			//LOG(2, "Failed to open " << name << ": " << ret);
 			continue;
 		}
 
@@ -40,8 +41,8 @@ DmaHeap::DmaHeap()
 		break;
 	}
 
-	if (!dmaHeapHandle_.isValid())
-		LOG_ERROR("Could not open any dmaHeap device");
+//	if (!dmaHeapHandle_.isValid())
+		//LOG_ERROR("Could not open any dmaHeap device");
 }
 
 DmaHeap::~DmaHeap()
@@ -63,7 +64,7 @@ libcamera::UniqueFD DmaHeap::alloc(const char *name, std::size_t size) const
 	ret = ::ioctl(dmaHeapHandle_.get(), DMA_HEAP_IOCTL_ALLOC, &alloc);
 	if (ret < 0)
 	{
-		LOG_ERROR("dmaHeap allocation failure for " << name);
+		//LOG_ERROR("dmaHeap allocation failure for " << name);
 		return {};
 	}
 
@@ -71,7 +72,7 @@ libcamera::UniqueFD DmaHeap::alloc(const char *name, std::size_t size) const
 	ret = ::ioctl(allocFd.get(), DMA_BUF_SET_NAME, name);
 	if (ret < 0)
 	{
-		LOG_ERROR("dmaHeap naming failure for " << name);
+		//LOG_ERROR("dmaHeap naming failure for " << name);
 		return {};
 	}
 
