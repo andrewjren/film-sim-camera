@@ -25,7 +25,7 @@ target_link_libraries(libpicamera PUBLIC
   ${LIBCAMERA_LINK_LIBRARIES}
   )
 
-add_executable(camdrm camdrm.cpp)
+add_executable(camdrm camdrm.cpp dma_heaps.cpp)
 target_include_directories(camdrm PRIVATE 
   ${DRM_INCLUDE_DIRS} 
   #${LIBCAMERA_INCLUDE_DIRS} 

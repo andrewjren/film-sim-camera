@@ -40,10 +40,8 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <iostream>
-//#include <iomanip>
 #include <memory>
 #include <thread>
-//#include <libcamera/libcamera.h>
 #include <gbm.h>
 #include <EGL/egl.h>
 //#include <GLES2/gl2.h>
@@ -95,14 +93,6 @@ static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
 
-/*
-enum CaptureMode{
-	eViewfinder,
-	eStillCapture
-};
-
-CaptureMode capture_mode;
-*/
 // Setup full screen quad
 float quad[] = {
   -1, -1, 0, 0,
@@ -114,8 +104,6 @@ float quad[] = {
 const int screen_width = 640;
 const int screen_height = 480;
 
-//FrameQueue frameQueue;
-//FrameManager frame_manager;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -1156,21 +1144,6 @@ int main(int argc, char **argv)
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     std::cout << "after binding textures: " << glGetError() << std::endl;
-/*
-    // Draw
-    glViewport(0,0,test_width,test_height);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    std::cout << "after drawing: " << glGetError() << std::endl;
-
-    // Read pixels
-    std::vector<unsigned char> pixels(test_width * test_height * 4);
-    glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-
-    // Save to PNG
-    stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
-    std::cout << "Saved color-corrected image to output.png\n";
-*/
 
 	PiCamera::StartCamera();
     

@@ -7,6 +7,7 @@
 #include <iostream> // TODO: Remove and create a logger class
 #include <libcamera/libcamera.h>
 #include <FrameManager.hpp>
+#include "dma_heaps.hpp"
 
 enum CaptureMode{
 	eViewfinder,
@@ -22,6 +23,10 @@ class PiCamera {
     static libcamera::FrameBufferAllocator *allocator;
     static std::unique_ptr<libcamera::CameraConfiguration> config;
     static libcamera::Stream *stream;
+    static std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers;
+    std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
+    std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
+    DmaHeap dma_heap_;
 
     PiCamera();
 
