@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <sys/mman.h>
 #include <linux/dma-buf.h>
+#include <sys/ioctl.h>
 
 std::shared_ptr<libcamera::Camera> PiCamera::camera;
 std::unique_ptr<libcamera::CameraManager> PiCamera::camera_manager;
@@ -45,6 +46,7 @@ void PiCamera::Initialize() {
 
     ConfigureViewfinder();
     //ConfigureStillCapture();
+    MapBuffers();
     AllocateBuffers();
 
     camera->requestCompleted.connect(requestComplete);
