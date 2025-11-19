@@ -42,7 +42,7 @@ void PiCamera::Initialize() {
 
     camera = camera_manager->get(cameraId);
     camera->acquire();
-    allocator = new libcamera::FrameBufferAllocator(camera);
+    //allocator = new libcamera::FrameBufferAllocator(camera);
 
     /*
     ConfigureViewfinder();
@@ -55,6 +55,8 @@ void PiCamera::Initialize() {
 }
 
 void PiCamera::StartViewfinder() {
+    allocator = new libcamera::FrameBufferAllocator(camera);
+
     ConfigureViewfinder();
     MapBuffers();
     AllocateBuffers();
@@ -63,6 +65,8 @@ void PiCamera::StartViewfinder() {
 }
 
 void PiCamera::StartStillCapture() {
+    allocator = new libcamera::FrameBufferAllocator(camera);
+
     ConfigureStillCapture();
     MapBuffers();
     AllocateBuffers();
@@ -241,9 +245,11 @@ void PiCamera::StartCamera() {
 
 void PiCamera::StopCamera() {
     camera->stop();
-    camera->requestCompleted.disconnect(requestComplete);
     allocator->free(stream);
-    camera_manager->stop();
+    delete allocator;
+    camera->requestCompleted.disconnect(requestComplete);
+    requests.clear();
+    config.reset();
 }
 
 void PiCamera::Cleanup() {

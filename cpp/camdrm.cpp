@@ -1155,20 +1155,22 @@ int main(int argc, char **argv)
 	vec_frame.resize(test_width * test_height * 4);
 
     while(once < 1000) {
-        //FrameData frame; 
 
         if (once == 100) {
+            std::cout << "Frame: " << once << std::endl;
             std::cout << "Starting Capture..." << std::endl;
-            //PiCamera::StopCamera();
+            PiCamera::StopCamera();
             PiCamera::StartStillCapture();
+            PiCamera::StartCamera();
             capture_started = true;
             once++;
         }
         
         if (frame_manager->data_available()) {
+            std::cout << "Frame: " << once << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
-	        std::cout<< "new frame size: " << vec_frame.size() << std::endl;
+	        //std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 
             if (capture_started) {
                 stbi_write_png("debug-capture.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
@@ -1187,7 +1189,7 @@ int main(int argc, char **argv)
             else {
                 std::cout << "camera ptr error" << std::endl;
             }
-            std::cout << "input pbo mapped: " << ptr << std::endl;
+            //std::cout << "input pbo mapped: " << ptr << std::endl;
 
             // Transfer to texture
             glBindTexture(GL_TEXTURE_2D, test_texture);
