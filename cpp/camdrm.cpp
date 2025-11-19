@@ -799,6 +799,7 @@ int main(int argc, char **argv)
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
 	PiCamera::Initialize();
+    PiCamera::StartViewfinder();
 	PiCamera::SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
@@ -1147,22 +1148,33 @@ int main(int argc, char **argv)
 
 	PiCamera::StartCamera();
     
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    //std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;
+    bool capture_started = false;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
 
     while(once < 1000) {
         //FrameData frame; 
+
+        if (once == 100) {
+            std::cout << "Starting Capture..." << std::endl;
+            PiCamera::StopCamera();
+            PiCamera::StartStillCapture();
+            capture_started = true;
+            once++;
+        }
         
         if (frame_manager->data_available()) {
             // get data 
             frame_manager->swap_buffers(vec_frame);
-	    std::cout<< "new frame size: " << vec_frame.size() << std::endl;
-	    
-	    //test
-	    //stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
+	        std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 
+            if (capture_started) {
+                stbi_write_png("debug-capture.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
+                capture_started = false;
+            }
+	    
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
             void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT);

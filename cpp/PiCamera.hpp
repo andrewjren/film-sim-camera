@@ -44,6 +44,9 @@ class PiCamera {
     static void ConfigureViewfinder();
     static void ConfigureStillCapture();
     static void StartCamera();
+    static void StartViewfinder();
+    static void StartStillCapture();
+    static void StopCamera();
     static void SetFrameManager(std::shared_ptr<FrameManager>);
     static void Cleanup();
     static void MapBuffers();

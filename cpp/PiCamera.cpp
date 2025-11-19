@@ -44,8 +44,26 @@ void PiCamera::Initialize() {
     camera->acquire();
     allocator = new libcamera::FrameBufferAllocator(camera);
 
+    /*
     ConfigureViewfinder();
     //ConfigureStillCapture();
+    MapBuffers();
+    AllocateBuffers();
+
+    camera->requestCompleted.connect(requestComplete);
+    */
+}
+
+void PiCamera::StartViewfinder() {
+    ConfigureViewfinder();
+    MapBuffers();
+    AllocateBuffers();
+
+    camera->requestCompleted.connect(requestComplete);
+}
+
+void PiCamera::StartStillCapture() {
+    ConfigureStillCapture();
     MapBuffers();
     AllocateBuffers();
 
@@ -219,6 +237,13 @@ void PiCamera::StartCamera() {
     camera->start();
     for (std::unique_ptr<libcamera::Request> &request : requests)
         camera->queueRequest(request.get());
+}
+
+void PiCamera::StopCamera() {
+    camera->stop();
+    camera->requestCompleted.disconnect(this, requestComplete);
+    allocator->free(stream);
+    camera_manager->stop();
 }
 
 void PiCamera::Cleanup() {
