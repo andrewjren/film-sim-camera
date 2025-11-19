@@ -121,6 +121,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
     if (request->status() == libcamera::Request::RequestCancelled)
         return;
 
+/*
     struct dma_buf_sync dma_sync {};
 	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
 	for (auto const &buffer_map : request->buffers())
@@ -133,7 +134,15 @@ void PiCamera::requestComplete(libcamera::Request *request)
 		if (ret)
 			throw std::runtime_error("failed to sync dma buf on request complete");
 	}
-/*
+
+    libcamera::CompletedRequest *r = new libcamera::CompletedRequest(sequence_++, request);
+	libcamera::CompletedRequestPtr payload(r, [this](libcamera::CompletedRequest *cr) { this->queueRequest(cr); });
+	{
+		std::lock_guard<std::mutex> lock(completed_requests_mutex_);
+		completed_requests_.insert(r);
+	}
+        */
+
     const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
 
     for (auto bufferPair : buffers) {
@@ -155,7 +164,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
             if (capture_mode == eViewfinder)
                 frame_manager->update(addr, plane.length);
         }
-*/
+
         if (capture_mode == eViewfinder)
         {
             request->reuse(libcamera::Request::ReuseBuffers);
@@ -171,8 +180,8 @@ void PiCamera::requestComplete(libcamera::Request *request)
                 //cameraController.startCapture();
             }).detach();
         }
-//    }
-    
+    }
+
 }
 
 std::shared_ptr<libcamera::Camera> PiCamera::GetCamera() {
