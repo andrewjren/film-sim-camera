@@ -1159,7 +1159,7 @@ int main(int argc, char **argv)
 
         if (once == 100) {
             std::cout << "Starting Capture..." << std::endl;
-            PiCamera::StopCamera();
+            //PiCamera::StopCamera();
             PiCamera::StartStillCapture();
             capture_started = true;
             once++;
