@@ -242,8 +242,11 @@ void PiCamera::StartCamera() {
 void PiCamera::StopCamera() {
     camera->stop();
     camera->requestCompleted.disconnect(this, requestComplete);
-    allocator->free(stream);
-    camera_manager->stop();
+    for (auto &request : requests) {
+        delete request;
+    }
+    requests.clear();
+    config.reset();
 }
 
 void PiCamera::Cleanup() {
