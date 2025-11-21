@@ -1161,6 +1161,7 @@ int main(int argc, char **argv)
             std::cout << "Starting Capture..." << std::endl;
             PiCamera::StopCamera();
             PiCamera::StartStillCapture();
+            frame_manager->clear_buffers();
             PiCamera::StartCamera();
             capture_started = true;
             once++;

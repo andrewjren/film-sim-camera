@@ -40,6 +40,12 @@ public:
         frame_data.first = false; // processed this data
         frame_data.second.swap(vector_in);
     }
+
+    void clear_buffers() {
+        std::unique_lock<std::mutex> lock(mutex);
+        frame_data.first = false;
+        frame_data.second.reset();
+    }
 };
 
 #endif
