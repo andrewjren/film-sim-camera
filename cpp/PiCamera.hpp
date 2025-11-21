@@ -37,6 +37,8 @@ class PiCamera {
 
     static CaptureMode capture_mode; 
     static std::shared_ptr<FrameManager> frame_manager;
+    static std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
+    static std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
     
     static void Initialize();
     static void AllocateBuffers();
@@ -50,6 +52,7 @@ class PiCamera {
     static void SetFrameManager(std::shared_ptr<FrameManager>);
     static void Cleanup();
     static void MapBuffers();
+    static void Configure();
 };
 
 #endif // CPP_PICAMERA_HPP

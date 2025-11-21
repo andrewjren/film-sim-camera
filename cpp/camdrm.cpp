@@ -799,7 +799,7 @@ int main(int argc, char **argv)
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
 	PiCamera::Initialize();
-    PiCamera::StartViewfinder();
+    //PiCamera::StartViewfinder();
 	PiCamera::SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
