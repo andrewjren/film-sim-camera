@@ -44,7 +44,7 @@ public:
     void clear_buffers() {
         std::unique_lock<std::mutex> lock(mutex);
         frame_data.first = false;
-        frame_data.second.reset();
+        frame_data.second.clear();
     }
 };
 
