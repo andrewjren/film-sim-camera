@@ -9,7 +9,7 @@ std::unique_ptr<libcamera::CameraManager> PiCamera::camera_manager;
 std::vector<std::unique_ptr<libcamera::Request>> PiCamera::requests;
 libcamera::FrameBufferAllocator *PiCamera::allocator;
 std::unique_ptr<libcamera::CameraConfiguration> PiCamera::config;
-libcamera::Stream *PiCamera::stream;
+//libcamera::Stream *PiCamera::stream;
 
 CaptureMode PiCamera::capture_mode; 
 std::shared_ptr<FrameManager> PiCamera::frame_manager;
@@ -84,30 +84,32 @@ void PiCamera::AllocateBuffers() {
 
         size_t allocated = allocator->buffers(cfg.stream()).size();
         std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
-    }
+    
 
-    //libcamera::Stream *stream = streamConfig.stream();
-    stream = viewfinder_config->stream();
-    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
+        // create requests 
+        //libcamera::Stream *stream = streamConfig.stream();
+        libcamera::Stream *stream = cfg.stream();
+        const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
 
-    for (unsigned int i = 0; i < buffers.size(); ++i) {
-        std::unique_ptr<libcamera::Request> request = camera->createRequest();
-        if (!request)
-        {
-            std::cerr << "Can't create request" << std::endl;
-            return;// -ENOMEM;
+        for (unsigned int i = 0; i < buffers.size(); ++i) {
+            std::unique_ptr<libcamera::Request> request = camera->createRequest();
+            if (!request)
+            {
+                std::cerr << "Can't create request" << std::endl;
+                return;// -ENOMEM;
+            }
+
+            const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
+            int ret = request->addBuffer(stream, buffer.get());
+            if (ret < 0)
+            {
+                std::cerr << "Can't set buffer for request"
+                    << std::endl;
+                return;// ret;
+            }
+
+            requests.push_back(std::move(request));
         }
-
-        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-        int ret = request->addBuffer(stream, buffer.get());
-        if (ret < 0)
-        {
-            std::cerr << "Can't set buffer for request"
-                << std::endl;
-            return;// ret;
-        }
-
-        requests.push_back(std::move(request));
     }
 }
 
@@ -138,12 +140,40 @@ void PiCamera::MapBuffers() {
     }
 }
 
+void PiCamera::CreateRequests() {
+    for (libcamera::StreamConfiguration &stream_config : *config) {
+        libcamera::Stream *stream = stream_config.stream();
+
+        for (const auto& pair : frame_buffers) {
+            std::unique_ptr<libcamera::Request> request = camera->createRequest();
+            if (!request)
+            {
+                std::cerr << "Can't create request" << std::endl;
+                return;// -ENOMEM;
+            }
+
+            //const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
+            const std::unique_ptr<libcamera::FrameBuffer> &buffer = pair.second;
+            int ret = request->addBuffer(stream, buffer.get());
+            if (ret < 0)
+            {
+                std::cerr << "Can't set buffer for request"
+                    << std::endl;
+                return;// ret;
+            }
+
+            requests.push_back(std::move(request));
+        }
+
+    }
+}
+
 void PiCamera::requestComplete(libcamera::Request *request)
 {
     if (request->status() == libcamera::Request::RequestCancelled)
         return;
 
-/*
+
     struct dma_buf_sync dma_sync {};
 	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
 	for (auto const &buffer_map : request->buffers())
@@ -157,6 +187,11 @@ void PiCamera::requestComplete(libcamera::Request *request)
 			throw std::runtime_error("failed to sync dma buf on request complete");
 	}
 
+
+    // Can be done outside of this as a callback, handle update to buffer 
+    libcamera::Stream *stream = config->at(0).stream();
+    libcamera::FrameBuffer *buffer = frame_buffers[stream];
+/*
     libcamera::CompletedRequest *r = new libcamera::CompletedRequest(sequence_++, request);
 	libcamera::CompletedRequestPtr payload(r, [this](libcamera::CompletedRequest *cr) { this->queueRequest(cr); });
 	{
@@ -164,6 +199,8 @@ void PiCamera::requestComplete(libcamera::Request *request)
 		completed_requests_.insert(r);
 	}
         */
+
+/*
     libcamera::FrameBuffer *viewfinder_buffer = request->findBuffer(viewfinder_config->stream());
 
     if (viewfinder_buffer) {
@@ -207,7 +244,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
                 //cameraController.startCapture();
             }).detach();
         }
-    }
+    }*/
 
 }
 
@@ -225,9 +262,9 @@ void PiCamera::Configure() {
     viewfinder_config = std::make_shared<libcamera::StreamConfiguration>(config->at(0));
     config->at(0).size.width = 1296;
     config->at(0).size.height = 972;
-    config->validate();
-    std::cout << "Validated viewfinder configuration is: " << config->at(0).toString() << std::endl;
-    camera->configure(config.get());
+    //config->validate();
+    //std::cout << "Validated viewfinder configuration is: " << config->at(0).toString() << std::endl;
+    //camera->configure(config.get());
 
     std::cout << "Default still capture configuration is: " << config->at(1).toString() << std::endl;
     stillcapture_config = std::make_shared<libcamera::StreamConfiguration>(config->at(1));
