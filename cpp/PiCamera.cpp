@@ -198,8 +198,9 @@ void PiCamera::requestComplete(libcamera::Request *request)
     libcamera::Stream *stream = config->at(0).stream();
     libcamera::FrameBuffer *buffer = frame_buffers[stream][0].get();
     std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[buffer];
-    frame_manager->update(mapped_span.data(), mapped_span.size());
-
+    frame_manager->update(mapped_span[0].data(), mapped_span[0].size());
+    request->reuse(libcamera::Request::ReuseBuffers);
+    camera->queueRequest(request); 
 /*
     libcamera::CompletedRequest *r = new libcamera::CompletedRequest(sequence_++, request);
 	libcamera::CompletedRequestPtr payload(r, [this](libcamera::CompletedRequest *cr) { this->queueRequest(cr); });
