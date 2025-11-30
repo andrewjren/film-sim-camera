@@ -1157,7 +1157,7 @@ int main(int argc, char **argv)
 
     while(once < 1000) {
 
-        if (once == 100) {
+        if (false && once == 100) {
             std::cout << "Frame: " << once << std::endl;
             std::cout << "Starting Capture..." << std::endl;
             PiCamera::StopCamera();
