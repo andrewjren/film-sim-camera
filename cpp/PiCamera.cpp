@@ -145,6 +145,12 @@ void PiCamera::CreateRequests() {
     for (libcamera::StreamConfiguration &stream_config : *config) {
         libcamera::Stream *stream = stream_config.stream();
 
+        /*
+        if (stream == config->at(0).stream())
+        {
+
+        }*/
+
         for (const auto& pair : frame_buffers) {
             std::unique_ptr<libcamera::Request> request = camera->createRequest();
             if (!request)
@@ -155,15 +161,17 @@ void PiCamera::CreateRequests() {
 
             //const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
             //const std::unique_ptr<libcamera::FrameBuffer> &buffer = pair.second;
-            int ret = request->addBuffer(pair.first, pair.second[0].get());
-            if (ret < 0)
-            {
-                std::cerr << "Can't set buffer for request"
-                    << std::endl;
-                return;// ret;
-            }
+            for (const auto& buffer : pair.second) {
+                int ret = request->addBuffer(pair.first, buffer);
+                if (ret < 0)
+                {
+                    std::cerr << "Can't set buffer for request"
+                        << std::endl;
+                    return;// ret;
+                }
 
-            requests.push_back(std::move(request));
+                requests.push_back(std::move(request));
+            }
         }
 
     }
