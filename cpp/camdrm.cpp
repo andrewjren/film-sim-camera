@@ -1157,14 +1157,11 @@ int main(int argc, char **argv)
 
     while(once < 1000) {
 
-        if (false && once == 100) {
+        if (once == 100) {
             std::cout << "Frame: " << once << std::endl;
             std::cout << "Starting Capture..." << std::endl;
-            PiCamera::StopCamera();
-            PiCamera::StartStillCapture();
-            frame_manager->clear_buffers();
-            PiCamera::StartCamera();
-            capture_started = true;
+	        frame_manager->swap_capture(vec_frame); 
+            stbi_write_png("debug-capture.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
             once++;
         }
         
@@ -1174,11 +1171,6 @@ int main(int argc, char **argv)
             frame_manager->swap_buffers(vec_frame);
 	        //std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 
-            if (capture_started) {
-                stbi_write_png("debug-capture.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
-                capture_started = false;
-            }
-	    
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
             void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT);
