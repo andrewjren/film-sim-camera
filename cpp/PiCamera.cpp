@@ -196,7 +196,13 @@ void PiCamera::requestComplete(libcamera::Request *request)
     // Can be done outside of this as a callback, handle update to buffer 
     // Viewfinder buffers 4 frames at a time - just process one 
     libcamera::Stream *stream = config->at(0).stream();
-    libcamera::FrameBuffer *buffer = frame_buffers[stream][0].get();
+    libcamera::FrameBuffer *buffer = request->findBuffer(stream); //frame_buffers[stream][0].get();
+
+    if (!buffer) {
+        std::cout << "Not a Viewfinder Buffer" << std::endl;
+        return;
+    }
+
     std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[buffer];
     frame_manager->update(mapped_span[0].data(), mapped_span[0].size());
     request->reuse(libcamera::Request::ReuseBuffers);
