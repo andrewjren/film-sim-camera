@@ -49,6 +49,7 @@ void PiCamera::Initialize() {
 
     MapBuffers();
     AllocateBuffers();
+    CreateRequests();
 
     camera->requestCompleted.connect(requestComplete);
 }
@@ -153,8 +154,8 @@ void PiCamera::CreateRequests() {
             }
 
             //const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-            const std::unique_ptr<libcamera::FrameBuffer> &buffer = pair.second;
-            int ret = request->addBuffer(stream, buffer.get());
+            //const std::unique_ptr<libcamera::FrameBuffer> &buffer = pair.second;
+            int ret = request->addBuffer(pair.first, pair.second[0].get());
             if (ret < 0)
             {
                 std::cerr << "Can't set buffer for request"
@@ -190,7 +191,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     // Can be done outside of this as a callback, handle update to buffer 
     libcamera::Stream *stream = config->at(0).stream();
-    libcamera::FrameBuffer *buffer = frame_buffers[stream];
+    libcamera::FrameBuffer *buffer = frame_buffers[stream][0].get();
 /*
     libcamera::CompletedRequest *r = new libcamera::CompletedRequest(sequence_++, request);
 	libcamera::CompletedRequestPtr payload(r, [this](libcamera::CompletedRequest *cr) { this->queueRequest(cr); });
@@ -284,7 +285,7 @@ void PiCamera::ConfigureViewfinder() { // TODO: pass in parameters?
     config->validate();
     std::cout << "Validated viewfinder configuration is: " << config->at(0).toString() << std::endl;
     camera->configure(config.get());
-    stream = config->at(0).stream();// this now happens before the full config is validated? idk
+    //stream = config->at(0).stream();// this now happens before the full config is validated? idk
 }
 
 void PiCamera::ConfigureStillCapture() {
@@ -306,7 +307,7 @@ void PiCamera::StartCamera() {
 
 void PiCamera::StopCamera() {
     camera->stop();
-    allocator->free(stream);
+    //allocator->free(stream);
     delete allocator;
     camera->requestCompleted.disconnect(requestComplete);
     requests.clear();
@@ -315,7 +316,7 @@ void PiCamera::StopCamera() {
 
 void PiCamera::Cleanup() {
     camera->stop();
-    allocator->free(stream);
+    //allocator->free(stream);
     delete allocator;
     camera->release();
     camera.reset();

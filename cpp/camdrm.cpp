@@ -1147,6 +1147,7 @@ int main(int argc, char **argv)
     std::cout << "after binding textures: " << glGetError() << std::endl;
 
 	PiCamera::StartCamera();
+    //PiCamera::CreateRequests();
     
     //std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;

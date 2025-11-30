@@ -53,6 +53,7 @@ class PiCamera {
     static void Cleanup();
     static void MapBuffers();
     static void Configure();
+    static void CreateRequests();
 };
 
 #endif // CPP_PICAMERA_HPP
