@@ -786,13 +786,12 @@ void main()
     //    1.000,  1.8556,  0.000
     //);   
 
-    vec4 color;
-    color = vec4(yuvToRgb * vec3(y, u, v), 1.0);
+    vec3 orig_color;
+    orig_color = yuvToRgb * vec3(y, u, v);
     
     // Clamp to valid range
-    color = clamp(color, 0.0, 1.0);
-    color = texture(clut, color.rgb);
-    fragColor = vec4(color);
+    orig_color = clamp(orig_color, 0.0, 1.0);
+    fragColor = texture(clut, orig_color);
 }
 )";
 
@@ -1077,9 +1076,28 @@ if (!valid) {
     uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
     vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
     lutTextureLoc = glGetUniformLocation(yuv2rgb_program, "clut");
-    std::cout << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << std::endl;
     unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
-	glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
+ 
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glUniform1i(yTextureLoc, 2);
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glUniform1i(uTextureLoc, 3);
+
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glUniform1i(vTextureLoc, 4);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glUniform1i(lutTextureLoc, 1);
+
+    std::cout << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
+    glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
+
+
 
     // Create shader program for Viewfinder
     // Create a shader program
@@ -1423,6 +1441,7 @@ if (!valid) {
             glBindTexture(GL_TEXTURE_2D, test_texture);
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_3D, lut_texture);
+
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
