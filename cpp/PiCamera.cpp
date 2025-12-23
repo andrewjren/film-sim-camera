@@ -169,6 +169,9 @@ void PiCamera::CreateRequests() {
                 return;// ret;
             }
 
+            libcamera::ControlList &controls = request->controls();
+            controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+
             requests.push_back(std::move(request));
         }
     }

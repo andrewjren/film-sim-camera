@@ -89,7 +89,7 @@ static unsigned int lut_pbo;
 static unsigned int output_pbo;
 static unsigned int y_texture, u_texture, v_texture;
 static unsigned int rgb_pbo;
-static unsigned int yTextureLoc, uTextureLoc, vTextureLoc;
+static unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
 static GLuint vao,vbo;
 static GLuint program, vert, frag;
 static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
@@ -745,10 +745,11 @@ static const char *yuv2rgb_vertex_shader_code = R"(
 in vec2 aPos;
 in vec2 aTexCoord;
 out vec2 TexCoord;
+uniform mat4 rotate;
 
 void main()
 {
-    gl_Position = vec4(aPos, 0.0, 1.0);
+    gl_Position = rotate * vec4(aPos, 0.0, 1.0);
     TexCoord = aTexCoord;
 }
 )";
@@ -756,23 +757,26 @@ void main()
 static const char *yuv2rgb_fragment_shader_code = R"(
 #version 300 es
 precision highp float;
+precision highp sampler3D;
 in vec2 TexCoord;
 out vec4 fragColor;
 uniform sampler2D yTexture;
 uniform sampler2D uTexture;
 uniform sampler2D vTexture;
+uniform sampler3D clut;
 
 void main()
 {
     float y = texture(yTexture, TexCoord).r;
-    float u = texture(uTexture, TexCoord).r - 0.6;
-    float v = texture(vTexture, TexCoord).r - 0.6;
+    float u = texture(uTexture, TexCoord).r - 0.5;
+    float v = texture(vTexture, TexCoord).r - 0.5;
     
     //YUV to RGB conversion matrix (BT.601)
+    //Note that opengl defines columns first, so the first three elements are in column 1
     mat3 yuvToRgb = mat3(
-        1.000,  0.000,  1.4020,
-        1.000, -0.3441, -0.7141,
-        1.000,  1.7720,  0.000
+        1.000, 1.000, 1.000,
+        0.000, -0.3441, 1.7720,
+        1.4020, -0.7141, 0.000
     );
 
     // BT.709 (HDTV standard)
@@ -782,11 +786,13 @@ void main()
     //    1.000,  1.8556,  0.000
     //);   
 
-    vec3 color = yuvToRgb * vec3(y, u, v);
+    vec4 color;
+    color = vec4(yuvToRgb * vec3(y, u, v), 1.0);
     
     // Clamp to valid range
-    //color = clamp(color, 0.0, 1.0);
-    fragColor = vec4(color, 1.0);
+    color = clamp(color, 0.0, 1.0);
+    color = texture(clut, color.rgb);
+    fragColor = vec4(color);
 }
 )";
 
@@ -1021,7 +1027,9 @@ int main(int argc, char **argv)
 	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
 	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
 	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
-	//trans_mat = glm::translate(trans_mat, glm::vec3(-1.0f, -0.0f, -0.0f));
+
+    glm::mat4 rot_mat = glm::mat4(1.0f);
+    rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
 	
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
@@ -1068,8 +1076,11 @@ if (!valid) {
     yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
     uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
     vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
+    lutTextureLoc = glGetUniformLocation(yuv2rgb_program, "clut");
     std::cout << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << std::endl;
- 
+    unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
+	glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
+
     // Create shader program for Viewfinder
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
@@ -1308,6 +1319,8 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             glBindTexture(GL_TEXTURE_2D, v_texture);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
 
+            glBindTexture(GL_TEXTURE_3D, lut_texture);
+
             glBindTexture(GL_TEXTURE_2D, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
@@ -1341,6 +1354,10 @@ if (!valid) {
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, v_texture);
             glUniform1i(vTextureLoc, 2);
+
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            glUniform1i(lutTextureLoc, 3);
 
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
