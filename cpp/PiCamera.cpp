@@ -20,6 +20,7 @@ std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer
 DmaHeap PiCamera::dma_heap_;
 std::shared_ptr<libcamera::StreamConfiguration> PiCamera::viewfinder_config;
 std::shared_ptr<libcamera::StreamConfiguration> PiCamera::stillcapture_config;
+unsigned int PiCamera::stride;
  
 PiCamera::PiCamera() {
 }
@@ -299,6 +300,9 @@ void PiCamera::Configure() {
     config->at(1).size.height = 972;
     config->validate();
     std::cout << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;
+    std::cout << "Stride is: " << config->at(1).stride << std::endl;
+    stride = config->at(1).stride;
+    std::cout << "Pixel Format: " << config->at(1).pixelFormat.toString() << std::endl;
     camera->configure(config.get());
 }
 

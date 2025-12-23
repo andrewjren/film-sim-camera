@@ -87,8 +87,12 @@ static unsigned int test_texture;
 static unsigned int input_pbo;
 static unsigned int lut_pbo;
 static unsigned int output_pbo;
+static unsigned int y_texture, u_texture, v_texture;
+static unsigned int rgb_pbo;
+static unsigned int yTextureLoc, uTextureLoc, vTextureLoc;
 static GLuint vao,vbo;
 static GLuint program, vert, frag;
+static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
 static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
@@ -736,6 +740,50 @@ void main()
 }
 )";
 
+static const char *yuv2rgb_vertex_shader_code = R"(
+#version 300 es
+in vec2 aPos;
+in vec2 aTexCoord;
+out vec2 TexCoord;
+
+void main()
+{
+    gl_Position = vec4(aPos, 0.0, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+static const char *yuv2rgb_fragment_shader_code = R"(
+#version 300 es
+precision highp float;
+in vec2 TexCoord;
+out vec4 fragColor;
+uniform sampler2D yTexture;
+uniform sampler2D uTexture;
+uniform sampler2D vTexture;
+
+void main()
+{
+    float y = texture(yTexture, TexCoord).r;
+    float u = texture(uTexture, TexCoord).r - 0.5;
+    float v = texture(vTexture, TexCoord).r - 0.5;
+    
+    // YUV to RGB conversion matrix (BT.601)
+    mat3 yuvToRgb = mat3(
+        1.000,  0.000,  1.140,
+        1.000, -0.395, -0.581,
+        1.000,  2.032,  0.000
+    );
+    
+    vec3 rgb = yuvToRgb * vec3(y, u, v);
+    
+    // Clamp to valid range
+    rgb = clamp(rgb, 0.0, 1.0);
+    
+    fragColor = vec4(rgb, 1.0);
+}
+)";
+
 
 // The following code was adopted from
 // https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
@@ -957,6 +1005,7 @@ int main(int argc, char **argv)
 	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
 	//trans_mat = glm::translate(trans_mat, glm::vec3(-1.0f, -0.0f, -0.0f));
 	
+    // Create shader program for Viewfinder
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
@@ -978,11 +1027,14 @@ int main(int argc, char **argv)
     std::cout << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
+    //glDeleteShader(frag);
+    //glDeleteShader(vert);
 
-    std::cout << "after using program: " << glGetError() << std::endl;
-    GLint isCompiled = 0;
-    glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
-    if(isCompiled == GL_FALSE)
+
+    //std::cout << "after using program: " << glGetError() << std::endl;
+    //GLint isCompiled = 0;
+    //glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
+    /*if(isCompiled == GL_FALSE)
     {
         GLint maxLength = 0;
         glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
@@ -994,10 +1046,58 @@ int main(int argc, char **argv)
 
         // Provide the infolog in whatever manor you deem best.
         // Exit with failure.
-        glDeleteShader(frag); // Don't leak the shader.
         return 0;
-    }
+    }*/
 
+    // Create shader program for YUV to RGB conversion
+    yuv2rgb_program = glCreateProgram();
+    yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(yuv2rgb_vert, 1, &yuv2rgb_vertex_shader_code, NULL);
+    glCompileShader(yuv2rgb_vert);
+GLint success;
+glGetShaderiv(yuv2rgb_vert, GL_COMPILE_STATUS, &success);
+if (!success) {
+    GLchar infoLog[512];
+    glGetShaderInfoLog(yuv2rgb_vert, 512, NULL, infoLog);
+    std::cerr << "ERROR: Vertex shader compilation failed\n" << infoLog << std::endl;
+}
+    yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(yuv2rgb_frag, 1, &yuv2rgb_fragment_shader_code, NULL);
+    glCompileShader(yuv2rgb_frag);
+    std::cout << "compile yuv fragment shader: " << glGetError() << std::endl;
+glGetShaderiv(yuv2rgb_frag, GL_COMPILE_STATUS, &success);
+if (!success) {
+    GLchar infoLog[512];
+    glGetShaderInfoLog(yuv2rgb_frag, 512, NULL, infoLog);
+    std::cerr << "ERROR: Fragment shader compilation failed\n" << infoLog << std::endl;
+}
+    glAttachShader(yuv2rgb_program, yuv2rgb_frag);
+    glAttachShader(yuv2rgb_program, yuv2rgb_vert);
+    glLinkProgram(yuv2rgb_program);
+    std::cout << "link yuv2rgb shader: " << glGetError() << std::endl;
+
+    glDeleteShader(yuv2rgb_frag);
+    glDeleteShader(yuv2rgb_vert);
+    std::cout << "creating YUV to RGB program: " << glGetError() << std::endl;
+
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+    GLchar infoLog[1024];
+    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+    std::cerr << "Validation error:\n" << infoLog << std::endl;
+}
+    glUseProgram(yuv2rgb_program);
+     std::cout << "Using yuv program: " << glGetError() << std::endl;
+
+   
+    yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
+    uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
+    vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
+    std::cout << "texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << std::endl;
+    glUseProgram(program); 
     size_t image_size = test_width * test_height * 4; // RGBA
 
     std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
@@ -1021,6 +1121,40 @@ int main(int argc, char **argv)
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
     glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
+    // setup texture for YUV input images (from camera)
+    glGenBuffers(1, &y_texture);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenBuffers(1, &u_texture);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width/2, test_height/2, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenBuffers(1, &v_texture);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width/2, test_height/2, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+
+
+    // setup pbo for output image (to file)
+    glGenBuffers(1, &rgb_pbo);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
+    glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
+
+
+
 
     // load lut image 
     int lut_width, lut_height, lut_depth, lut_nrChannels;
@@ -1154,14 +1288,106 @@ int main(int argc, char **argv)
     bool capture_started = false;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
+    std::vector<uint8_t> cap_frame;
+    cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
 
     while(once < 1000) {
 
         if (once == 100) {
             std::cout << "Frame: " << once << std::endl;
             std::cout << "Starting Capture..." << std::endl;
-	        frame_manager->swap_capture(vec_frame); 
-            stbi_write_png("debug-capture.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
+	        frame_manager->swap_capture(cap_frame); 
+            
+            /*glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 
+            void* cap_ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, cap_frame.size(), GL_MAP_WRITE_BIT);
+            if (cap_ptr) {
+                memcpy(cap_ptr, cap_frame.data(), cap_frame.size());
+                glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+            }
+            else {
+                std::cout << "capture ptr error" << std::endl;
+            }*/
+            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + PiCamera::stride*test_height;
+            std::vector<uint8_t>::const_iterator u_end = y_end + PiCamera::stride*test_height/4;
+            std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
+
+            std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
+            std::vector<uint8_t> u_data(y_end, u_end);
+            std::vector<uint8_t> v_data(u_end, v_end); 
+
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, PiCamera::stride);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+             std::cout << "pixel store: " << glGetError() << std::endl;
+            glBindTexture(GL_TEXTURE_2D, y_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
+              std::cout << "y texture: " << glGetError() << std::endl;
+           glBindTexture(GL_TEXTURE_2D, u_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
+             std::cout << "u texture: " << glGetError() << std::endl;
+            glBindTexture(GL_TEXTURE_2D, v_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
+            std::cout << "v texture: " << glGetError() << std::endl;
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+std::cout << "Program ID: " << yuv2rgb_program << std::endl;
+if (yuv2rgb_program == 0) {
+    std::cerr << "ERROR: Program ID is 0 (not created)" << std::endl;
+}
+
+GLboolean isProgram = glIsProgram(yuv2rgb_program);
+std::cout << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+    GLchar infoLog[1024];
+    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+    std::cerr << "Validation error:\n" << infoLog << std::endl;
+}
+            glUseProgram(yuv2rgb_program);
+            std::cout << "Use program: " << glGetError() << std::endl;
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, y_texture);
+            glUniform1i(yTextureLoc, 0);
+            std::cout << "y tex: " << glGetError() << std::endl;
+
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, u_texture);
+            glUniform1i(uTextureLoc, 1);
+            std::cout << "u tex: " << glGetError() << std::endl;
+
+
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, v_texture);
+            glUniform1i(vTextureLoc, 2);
+            std::cout << "v tex: " << glGetError() << std::endl;
+
+
+            glBindVertexArray(vao);
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+            // Read Framebuffer
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
+            glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+
+			std::vector<unsigned char> cap_frame(test_width*test_height* 4);
+			if (ptr) {
+				// Get data out of buffer
+				memcpy(cap_frame.data(), ptr, test_width * test_height * 4);
+				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+			}
+			else {
+				std::cout << "full frame pointer fail" << std::endl;
+			}
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+
+            stbi_write_png("debug-capture.png", test_width, test_height, 4, cap_frame.data(), test_width*4);
             once++;
         }
         
@@ -1184,6 +1410,8 @@ int main(int argc, char **argv)
                 std::cout << "camera ptr error" << std::endl;
             }
             //std::cout << "input pbo mapped: " << ptr << std::endl;
+            glUseProgram(program);
+
 
             // Transfer to texture
             glBindTexture(GL_TEXTURE_2D, test_texture);
@@ -1196,7 +1424,7 @@ int main(int argc, char **argv)
             glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
             glViewport(0,0,test_width,test_height);
 
-            glUseProgram(program);
+            //glUseProgram(program);
 
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, test_texture);
@@ -1204,6 +1432,9 @@ int main(int argc, char **argv)
             glBindTexture(GL_TEXTURE_3D, lut_texture);
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_3D, 0);
 
             // Read Framebuffer
             glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
