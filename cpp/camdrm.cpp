@@ -39,10 +39,9 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <iomanip>
+#include <iostream>
 #include <memory>
 #include <thread>
-#include <libcamera/libcamera.h>
 #include <gbm.h>
 #include <EGL/egl.h>
 //#include <GLES2/gl2.h>
@@ -58,8 +57,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <PiCamera.hpp>
+#include <FrameManager.hpp>
 
-static std::shared_ptr<libcamera::Camera> camera;
 
 struct modeset_dev;
 static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn, struct modeset_dev *dev);
@@ -87,18 +87,15 @@ static unsigned int test_texture;
 static unsigned int input_pbo;
 static unsigned int lut_pbo;
 static unsigned int output_pbo;
+static unsigned int y_texture, u_texture, v_texture;
+static unsigned int rgb_pbo;
+static unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
 static GLuint vao,vbo;
 static GLuint program, vert, frag;
+static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
 static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
-
-enum CaptureMode{
-	eViewfinder,
-	eStillCapture
-};
-
-CaptureMode capture_mode;
 
 // Setup full screen quad
 float quad[] = {
@@ -111,42 +108,6 @@ float quad[] = {
 const int screen_width = 640;
 const int screen_height = 480;
 
-/* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
-   frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 
-   preview DRM window */
-class FrameManager {
-private:
-    //std::queue<FrameData> queue;
-    std::pair<bool, std::vector<uint8_t>> frame_data; // <data available, pointer to data>
-    std::mutex mutex;
-    //std::condition_variable cv;
-
-public:
-    void update(const void* ptr, size_t size) {
-        std::unique_lock<std::mutex> lock(mutex);
-
-		if (frame_data.second.size() != size) {
-			frame_data.second.resize(size);
-		}
-
-		memcpy(frame_data.second.data(), ptr, size);
-        frame_data.first = true; // indicate that new data is available
-    }
-
-    bool data_available() {
-        std::unique_lock<std::mutex> lock(mutex);
-        return frame_data.first;
-    }
-
-    void swap_buffers(std::vector<uint8_t> &vector_in) {
-        std::unique_lock<std::mutex> lock(mutex);
-        frame_data.first = false; // processed this data
-        frame_data.second.swap(vector_in);
-    }
-};
-
-//FrameQueue frameQueue;
-FrameManager frame_manager;
 
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
@@ -599,65 +560,6 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
     return 0;
 }
 
-static void requestComplete(libcamera::Request *request)
-{
-    //eglMakeCurrent(display, surface, surface, context);
-    
-    if (request->status() == libcamera::Request::RequestCancelled)
-    	return;
-
-    struct modeset_dev* iter;
-    const std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers = request->buffers();
-
-    for (auto bufferPair : buffers) {
-        libcamera::FrameBuffer *buffer = bufferPair.second;
-        const libcamera::FrameMetadata &metadata = buffer->metadata();
-
-        unsigned int nplane = 0;
-		for (const libcamera::FrameMetadata::Plane &plane : metadata.planes())
-		{
-			if (++nplane < metadata.planes().size()) 
-				std::cout << "/";
-		}
-
-		for (const libcamera::FrameBuffer::Plane &plane : buffer->planes()) {
-			if (!plane.fd.isValid()) {
-				break;
-			}
-			int fd = plane.fd.get();
-
-			// TODO: permanent mmap? 
-			uint8_t * addr = (uint8_t *) mmap(0, plane.length, PROT_READ, MAP_PRIVATE, fd, 0);
-			if (addr == MAP_FAILED) {
-					std::cout << "Map Failed" << std::endl;
-			}
-
-			if (capture_mode == eViewfinder)
-				frame_manager.update(addr, plane.length);
-			//else if (capture_mode == eStillCapture)
-				
-
-		}
-		//std::cout << std::endl;
-
-		if (capture_mode == eViewfinder)
-		{
-			request->reuse(libcamera::Request::ReuseBuffers);
-			camera->queueRequest(request); //NOTE: uncomment to make request happen each time 
-		}
-		else if (capture_mode == eStillCapture)
-		{
-			// DON'T requeue - single capture
-			// Switch back to viewfinder after delay
-			std::thread([&]() {
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				//cameraController.configureForViewfinder();
-				//cameraController.startCapture();
-			}).detach();
-		}
-    }
-}
-
 static drmModeConnector *getConnector(drmModeRes *resources)
 {
     for (int i = 0; i < resources->count_connectors; i++)
@@ -838,6 +740,61 @@ void main()
 }
 )";
 
+static const char *yuv2rgb_vertex_shader_code = R"(
+#version 300 es
+in vec2 aPos;
+in vec2 aTexCoord;
+out vec2 TexCoord;
+uniform mat4 rotate;
+
+void main()
+{
+    gl_Position = rotate * vec4(aPos, 0.0, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+static const char *yuv2rgb_fragment_shader_code = R"(
+#version 300 es
+precision highp float;
+precision highp sampler3D;
+in vec2 TexCoord;
+out vec4 fragColor;
+uniform sampler2D yTexture;
+uniform sampler2D uTexture;
+uniform sampler2D vTexture;
+uniform sampler3D clut;
+
+void main()
+{
+    float y = texture(yTexture, TexCoord).r;
+    float u = texture(uTexture, TexCoord).r - 0.5;
+    float v = texture(vTexture, TexCoord).r - 0.5;
+    
+    //YUV to RGB conversion matrix (BT.601)
+    //Note that opengl defines columns first, so the first three elements are in column 1
+    mat3 yuvToRgb = mat3(
+        1.000, 1.000, 1.000,
+        0.000, -0.3441, 1.7720,
+        1.4020, -0.7141, 0.000
+    );
+
+    // BT.709 (HDTV standard)
+    //mat3 yuvToRgb = mat3(
+    //    1.000,  0.000,  1.5748,
+    //    1.000, -0.1873, -0.4681,
+    //    1.000,  1.8556,  0.000
+    //);   
+
+    vec3 orig_color;
+    orig_color = yuvToRgb * vec3(y, u, v);
+    
+    // Clamp to valid range
+    orig_color = clamp(orig_color, 0.0, 1.0);
+    fragColor = texture(clut, orig_color);
+}
+)";
+
 
 // The following code was adopted from
 // https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
@@ -853,6 +810,18 @@ static const EGLint configAttribs[] = {
 static const EGLint contextAttribs[] = {
     EGL_CONTEXT_CLIENT_VERSION, 2,
     EGL_NONE};
+
+static void checkGlCompileErrors(GLuint shader)
+{
+    GLint isCompiled = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
+    if(isCompiled == GL_FALSE)
+    {
+        GLchar infoLog[512];
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        std::cerr << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
+    }
+}
 
 
 
@@ -898,84 +867,11 @@ int main(int argc, char **argv)
     struct modeset_dev *iter;
     //EGLDisplay display;
 
-    /* try to open camera */
-    std::unique_ptr<libcamera::CameraManager> cm = std::make_unique<libcamera::CameraManager>();
-    cm->start();
-    
-    for (auto const &camera : cm->cameras())
-        std::cout << camera->id() << std::endl;
+	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-    auto cameras = cm->cameras();
-    if (cameras.empty()) {
-        std::cout << "No cameras were identified on the system." << std::endl;
-        cm->stop();
-        return EXIT_FAILURE;
-    }
-
-    std::string cameraId = cameras[0]->id();
-
-    camera = cm->get(cameraId);
-/*
- * Note that `camera` may not compare equal to `cameras[0]`.
- * In fact, it might simply be a `nullptr`, as the particular
- * device might have disappeared (and reappeared) in the meantime.
- */
-    camera->acquire();
-
-    std::unique_ptr<libcamera::CameraConfiguration> config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
-    libcamera::StreamConfiguration &streamConfig = config->at(0);
-    std::cout << "Default viewfinder configuration is: " << streamConfig.toString() << std::endl;
-    streamConfig.size.width = 1296;
-    streamConfig.size.height = 972;
-	libcamera::StreamConfiguration &captureConfig = config->at(1);
-	std::cout << "Default viewfinder configuration is: " << captureConfig.toString() << std::endl;
-	captureConfig.size.width = 1296;
-	captureConfig.size.height = 972;
-    config->validate();
-    std::cout << "Validated viewfinder configuration is: " << streamConfig.toString() << std::endl;
-	std::cout << "Validated capture config is: " << captureConfig.toString() << std::endl;
-    camera->configure(config.get());
-
-    libcamera::FrameBufferAllocator *allocator = new libcamera::FrameBufferAllocator(camera);
-
-    for (libcamera::StreamConfiguration &cfg : *config) {
-        int ret = allocator->allocate(cfg.stream());
-        if (ret < 0) {
-            std::cerr << "Can't allocate buffers" << std::endl;
-            return -ENOMEM;
-        }
-
-        size_t allocated = allocator->buffers(cfg.stream()).size();
-        std::cout << "Allocated " << allocated << " buffers for stream" << std::endl;
-    }
-
-    libcamera::Stream *stream = streamConfig.stream();
-    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = allocator->buffers(stream);
-    std::vector<std::unique_ptr<libcamera::Request>> requests;
-
-    for (unsigned int i = 0; i < buffers.size(); ++i) {
-        std::unique_ptr<libcamera::Request> request = camera->createRequest();
-        if (!request)
-        {
-            std::cerr << "Can't create request" << std::endl;
-            return -ENOMEM;
-        }
-
-        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-        int ret = request->addBuffer(stream, buffer.get());
-        if (ret < 0)
-        {
-              std::cerr << "Can't set buffer for request"
-                  << std::endl;
-            return ret;
-        }
-
-        requests.push_back(std::move(request));
-    }
-    camera->requestCompleted.connect(requestComplete);
-    //camera->start();
-    //for (std::unique_ptr<libcamera::Request> &request : requests)
-    //   camera->queueRequest(request.get());
+	PiCamera::Initialize();
+    //PiCamera::StartViewfinder();
+	PiCamera::SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
     if (argc > 1)
@@ -1130,22 +1026,94 @@ int main(int argc, char **argv)
 	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
 	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
 	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
-	//trans_mat = glm::translate(trans_mat, glm::vec3(-1.0f, -0.0f, -0.0f));
+
+    glm::mat4 rot_mat = glm::mat4(1.0f);
+    rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
 	
+    // Create shader program for YUV to RGB conversion
+    yuv2rgb_program = glCreateProgram();
+    yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(yuv2rgb_vert, 1, &yuv2rgb_vertex_shader_code, NULL);
+    glCompileShader(yuv2rgb_vert);
+    checkGlCompileErrors(yuv2rgb_vert);
+
+    yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(yuv2rgb_frag, 1, &yuv2rgb_fragment_shader_code, NULL);
+    glCompileShader(yuv2rgb_frag);
+    checkGlCompileErrors(yuv2rgb_frag);
+    GLint isCompiled = 0;
+    glGetShaderiv(yuv2rgb_frag, GL_COMPILE_STATUS, &isCompiled);
+    if(isCompiled == GL_FALSE)
+    {
+        GLchar infoLog[512];
+        glGetShaderInfoLog(yuv2rgb_frag, 512, NULL, infoLog);
+        std::cerr << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
+    }
+
+    glAttachShader(yuv2rgb_program, yuv2rgb_frag);
+    glAttachShader(yuv2rgb_program, yuv2rgb_vert);
+    glLinkProgram(yuv2rgb_program);
+    std::cout << "link yuv2rgb shader: " << glGetError() << std::endl;
+
+    //glDeleteShader(yuv2rgb_frag);
+    //glDeleteShader(yuv2rgb_vert);
+    std::cout << "creating YUV to RGB program: " << glGetError() << std::endl;
+
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+    GLchar infoLog[1024];
+    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+    std::cerr << "Validation error:\n" << infoLog << std::endl;
+}
+    glUseProgram(yuv2rgb_program);
+     std::cout << "Using yuv program: " << glGetError() << std::endl;
+
+   
+    yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
+    uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
+    vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
+    lutTextureLoc = glGetUniformLocation(yuv2rgb_program, "clut");
+    unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
+ 
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glUniform1i(yTextureLoc, 2);
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glUniform1i(uTextureLoc, 3);
+
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glUniform1i(vTextureLoc, 4);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glUniform1i(lutTextureLoc, 1);
+
+    std::cout << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
+    glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
+
+
+
+    // Create shader program for Viewfinder
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
-    std::cout << "before creating program: " << glGetError() << std::endl;
     program = glCreateProgram();
-    //glUseProgram(program);
     vert = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vert, 1, &vertexShaderCode, NULL);
     glCompileShader(vert);
-    std::cout << "vertex shade: " << glGetError() << std::endl;
+    checkGlCompileErrors(vert);
+
     frag = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(frag, 1, &fragmentShaderCode, NULL);
     glCompileShader(frag);
-    std::cout << "frag shader: " << glGetError() << std::endl;
+    checkGlCompileErrors(frag);
+
     glAttachShader(program, frag);
     glAttachShader(program, vert);
     std::cout << "attaching shaders: " << glGetError() << std::endl;
@@ -1153,38 +1121,8 @@ int main(int argc, char **argv)
     std::cout << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
-
-    std::cout << "after using program: " << glGetError() << std::endl;
-    GLint isCompiled = 0;
-    glGetShaderiv(frag, GL_COMPILE_STATUS, &isCompiled);
-    if(isCompiled == GL_FALSE)
-    {
-        GLint maxLength = 0;
-        glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &maxLength);
-
-        // The maxLength includes the NULL character
-        std::vector<GLchar> errorLog(maxLength);
-        glGetShaderInfoLog(frag, maxLength, &maxLength, &errorLog[0]);
-        std::cout << &errorLog[0] << std::endl;
-
-        // Provide the infolog in whatever manor you deem best.
-        // Exit with failure.
-        glDeleteShader(frag); // Don't leak the shader.
-        return 0;
-    }
-
-    
-    // load test image  
-    //int test_width, test_height, test_nrChannels;
-    /*
-    unsigned char *test_data = stbi_load("test.jpg", &test_width, &test_height, &test_nrChannels, 0); 
-    if (!test_data)
-    {
-        std::cout << "Failed to load texture" << std::endl;
-        return 0;
-    }
-    stbi_image_free(test_data);
-    */
+    //glDeleteShader(frag);
+    //glDeleteShader(vert);
 
     size_t image_size = test_width * test_height * 4; // RGBA
 
@@ -1209,6 +1147,37 @@ int main(int argc, char **argv)
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
     glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
+    // setup texture for YUV input images (from camera)
+    glGenTextures(1, &y_texture);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width, test_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenTextures(1, &u_texture);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenTextures(1, &v_texture);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+
+
+    // setup pbo for output image (to file)
+    glGenBuffers(1, &rgb_pbo);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
+    glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
 
     // load lut image 
     int lut_width, lut_height, lut_depth, lut_nrChannels;
@@ -1317,14 +1286,7 @@ int main(int argc, char **argv)
     std::cout << "after running gL program: " << glGetError() << std::endl;
     std::cout << "image_size: " << image_size << std::endl;
 
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-    void* test_ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, image_size, GL_MAP_WRITE_BIT);
-    if (test_ptr)
-    {
-        std::cout << "test worked" << std::endl;
-        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-    }
-    
+  
     // Bind textures
     glViewport(0,0,test_width,test_height);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -1333,40 +1295,118 @@ int main(int argc, char **argv)
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     std::cout << "after binding textures: " << glGetError() << std::endl;
-/*
-    // Draw
-    glViewport(0,0,test_width,test_height);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    std::cout << "after drawing: " << glGetError() << std::endl;
 
-    // Read pixels
-    std::vector<unsigned char> pixels(test_width * test_height * 4);
-    glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-
-    // Save to PNG
-    stbi_write_png("output.png", test_width, test_height, 4, pixels.data(), test_width * 4);
-    std::cout << "Saved color-corrected image to output.png\n";
-*/
-    camera->start();
-    for (std::unique_ptr<libcamera::Request> &request : requests)
-       camera->queueRequest(request.get());
+	PiCamera::StartCamera();
+    //PiCamera::CreateRequests();
     
-    std::this_thread::sleep_for(std::chrono::seconds(2));
     int once = 0;
+    bool capture_started = false;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
+    std::vector<uint8_t> cap_frame;
+    cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
+glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     while(once < 1000) {
-        //FrameData frame; 
+
+        if (once == 100) {
+            std::cout << "Frame: " << once << std::endl;
+            std::cout << "Starting Capture..." << std::endl;
+	        frame_manager->swap_capture(cap_frame); 
+            
+            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + PiCamera::stride*test_height;
+            std::vector<uint8_t>::const_iterator u_end = y_end + PiCamera::stride*test_height/4;
+            std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
+
+            std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
+            std::vector<uint8_t> u_data(y_end, u_end);
+            std::vector<uint8_t> v_data(u_end, v_end); 
+            std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
+
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, PiCamera::stride);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+            glBindTexture(GL_TEXTURE_2D, y_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
+
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, PiCamera::stride/2);
+
+            glBindTexture(GL_TEXTURE_2D, u_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
+
+            glBindTexture(GL_TEXTURE_2D, v_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
+
+            glBindTexture(GL_TEXTURE_3D, lut_texture);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+std::cout << "Program ID: " << yuv2rgb_program << std::endl;
+if (yuv2rgb_program == 0) {
+    std::cerr << "ERROR: Program ID is 0 (not created)" << std::endl;
+}
+
+GLboolean isProgram = glIsProgram(yuv2rgb_program);
+std::cout << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+    GLchar infoLog[1024];
+    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+    std::cerr << "Validation error:\n" << infoLog << std::endl;
+}
+            glUseProgram(yuv2rgb_program);
+            std::cout << "Use program: " << glGetError() << std::endl;
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, y_texture);
+            glUniform1i(yTextureLoc, 0);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, u_texture);
+            glUniform1i(uTextureLoc, 1);
+
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, v_texture);
+            glUniform1i(vTextureLoc, 2);
+
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            glUniform1i(lutTextureLoc, 3);
+
+            glBindVertexArray(vao);
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+            // Read Framebuffer
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+            glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+
+			std::vector<unsigned char> rgb_out(test_width*test_height* 4);
+			if (ptr) {
+				// Get data out of buffer
+				memcpy(rgb_out.data(), ptr, test_width * test_height * 4);
+				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+			}
+			else {
+				std::cout << "full frame pointer fail" << std::endl;
+			}
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+
+            stbi_write_png("debug-capture.png", test_width, test_height, 4, rgb_out.data(), test_width*4);
+            once++;
+        }
         
-        if (frame_manager.data_available()) {
+        if (frame_manager->data_available()) {
+            std::cout << "Frame: " << once << std::endl;
             // get data 
-            frame_manager.swap_buffers(vec_frame);
-	    std::cout<< "new frame size: " << vec_frame.size() << std::endl;
-	    
-	    //test
-	    //stbi_write_png("debug-camera-frame.png", test_width, test_height, 4, vec_frame.data(), test_width*4);
+            frame_manager->swap_buffers(vec_frame);
+	        //std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
@@ -1380,7 +1420,9 @@ int main(int argc, char **argv)
             else {
                 std::cout << "camera ptr error" << std::endl;
             }
-            std::cout << "input pbo mapped: " << ptr << std::endl;
+            //std::cout << "input pbo mapped: " << ptr << std::endl;
+
+            glUseProgram(program);
 
             // Transfer to texture
             glBindTexture(GL_TEXTURE_2D, test_texture);
@@ -1393,14 +1435,18 @@ int main(int argc, char **argv)
             glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
             glViewport(0,0,test_width,test_height);
 
-            glUseProgram(program);
+            //glUseProgram(program);
 
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, test_texture);
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_3D, lut_texture);
+
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_3D, 0);
 
             // Read Framebuffer
             glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
@@ -1438,18 +1484,6 @@ int main(int argc, char **argv)
 				std::cout << "drm pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            
-
-            //stbi_write_png("debug.png", test_width, test_height, 4, frame.data, test_width*4); // just make sure camera is actually reading things 
-            //std::cout << "Written" << std::endl;
-            //memcpy(&iter->map[0],pixels.data(),pixels.size());
-
-            // debug, try to write to png first 
-            //stbi_write_png("debug.png", test_width, test_height, 4, addr, test_width*4); // just make sure camera is actually reading things 
-            //std::cout << "Debug saved image to debug.png\n";
-            //memcpy(&iter->map[0],addr,plane.length);
-            //std::cout << "copied" << std::endl;
-            //std::cout << rtn << std::endl;
             once++;
 			
 			
@@ -1459,14 +1493,6 @@ int main(int argc, char **argv)
 
     /* cleanup everything */
     modeset_cleanup(fd);
-
-    camera->stop();
-    allocator->free(stream);
-    delete allocator;
-    camera->release();
-    camera.reset();
-    cm->stop();
-
 
     ret = 0;
 
