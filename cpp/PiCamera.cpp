@@ -5,6 +5,10 @@
 #include <sys/ioctl.h>
 #include <log.hpp>
 
+std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> PiCamera::mapped_buffers;
+std::shared_ptr<libcamera::Camera> PiCamera::camera;
+std::unique_ptr<libcamera::CameraConfiguration> PiCamera::config;
+std::shared_ptr<FrameManager> PiCamera::frame_manager;
 
 void PiCamera::Initialize() {
     capture_mode = eViewfinder;

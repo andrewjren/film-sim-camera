@@ -22,7 +22,7 @@
 #include <log.hpp>
 #include <Drm.hpp>
 
-
+/*
 int device;
 uint32_t connectorId;
 drmModeModeInfo mode;
@@ -32,7 +32,7 @@ struct gbm_surface *gbmSurface;
 
 static struct gbm_bo *previousBo = NULL;
 static uint32_t previousFb;
-
+*/
 // added to make render loop easier
 static int test_width, test_height, test_nrChannels;
 static unsigned int dstFBO, dstTex;
@@ -61,9 +61,6 @@ float quad[] = {
 
 const int screen_width = 640;
 const int screen_height = 480;
-
-PiCamera picamera = new PiCamera();
-
 
 
 // Get the EGL error back as a string. Useful for debugging.
@@ -281,9 +278,10 @@ int main(int argc, char **argv)
 
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-	picamera.Initialize();
+    std::unique_ptr<PiCamera> picamera(new PiCamera());
+	picamera->Initialize();
     //picamera.StartViewfinder();
-	picamera.SetFrameManager(frame_manager);
+	picamera->SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
     if (argc > 1)
@@ -708,7 +706,7 @@ if (!valid) {
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     LOG << "after binding textures: " << glGetError() << std::endl;
 
-	picamera.StartCamera();
+	picamera->StartCamera();
     //picamera.CreateRequests();
     
     int once = 0;
@@ -726,8 +724,8 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
-            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + picamera.stride*test_height;
-            std::vector<uint8_t>::const_iterator u_end = y_end + picamera.stride*test_height/4;
+            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + picamera->stride*test_height;
+            std::vector<uint8_t>::const_iterator u_end = y_end + picamera->stride*test_height/4;
             std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
 
             std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
@@ -735,13 +733,13 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             std::vector<uint8_t> v_data(u_end, v_end); 
             std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
 
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera.stride);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
             glBindTexture(GL_TEXTURE_2D, y_texture);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
 
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera.stride/2);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride/2);
 
             glBindTexture(GL_TEXTURE_2D, u_texture);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());

@@ -17,22 +17,22 @@ enum CaptureMode{
 class PiCamera {
     private:
 
-    std::shared_ptr<libcamera::Camera> camera;
+    static std::shared_ptr<libcamera::Camera> camera;
     std::unique_ptr<libcamera::CameraManager> camera_manager;
     std::vector<std::unique_ptr<libcamera::Request>> requests;
     libcamera::FrameBufferAllocator *allocator;
-    std::unique_ptr<libcamera::CameraConfiguration> config;
+    static std::unique_ptr<libcamera::CameraConfiguration> config;
     libcamera::Stream *stream;
-    std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
+    static std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
     std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
     DmaHeap dma_heap_;
     
-    void requestComplete(libcamera::Request*);
+    static void requestComplete(libcamera::Request*);
 
     public:
     PiCamera() {}
     CaptureMode capture_mode; 
-    std::shared_ptr<FrameManager> frame_manager;
+    static std::shared_ptr<FrameManager> frame_manager;
     std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
     std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
     unsigned int stride; // for correct YUV decoding

@@ -46,6 +46,27 @@
 
 namespace {
 
+int device;
+uint32_t connectorId;
+drmModeModeInfo mode;
+drmModeCrtc *crtc;
+struct gbm_device *gbmDevice;
+struct gbm_surface *gbmSurface;
+
+static struct gbm_bo *previousBo = NULL;
+static uint32_t previousFb;
+
+struct modeset_dev;
+static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+			     struct modeset_dev *dev);
+static int modeset_create_fb(int fd, struct modeset_dev *dev);
+static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
+			     struct modeset_dev *dev);
+static int modeset_open(int *out, const char *node);
+static int modeset_prepare(int fd);
+static void modeset_draw(void);
+static void modeset_cleanup(int fd);
+
 /*
  * When the linux kernel detects a graphics-card on your machine, it loads the
  * correct device driver (located in kernel-tree at ./drivers/gpu/drm/<xy>) and
