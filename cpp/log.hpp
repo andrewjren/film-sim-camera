@@ -3,8 +3,8 @@
 
 #include <iostream>
 
-#define LOG(text) std::cout << text << std::endl;
+#define LOG std::cout << "log(" __FILE__ << ":" << __LINE__ << "): "
 
-#define LOG_ERR(text) std::cerr << text << std::endl;
+#define LOG_ERR std::cerr << "err(" __FILE__ << ":" << __LINE__ << "): "
 
 #endif // LOG_HPP

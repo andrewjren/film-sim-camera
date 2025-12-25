@@ -17,44 +17,40 @@ enum CaptureMode{
 class PiCamera {
     private:
 
-    static std::shared_ptr<libcamera::Camera> camera;
-    static std::unique_ptr<libcamera::CameraManager> camera_manager;
-    static std::vector<std::unique_ptr<libcamera::Request>> requests;
-    static libcamera::FrameBufferAllocator *allocator;
-    static std::unique_ptr<libcamera::CameraConfiguration> config;
-    static libcamera::Stream *stream;
-    //static std::map<const libcamera::Stream *, libcamera::FrameBuffer *> &buffers;
-    static std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
-    static std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
-    static DmaHeap dma_heap_;
-
-    PiCamera();
-
+    std::shared_ptr<libcamera::Camera> camera;
+    std::unique_ptr<libcamera::CameraManager> camera_manager;
+    std::vector<std::unique_ptr<libcamera::Request>> requests;
+    libcamera::FrameBufferAllocator *allocator;
+    std::unique_ptr<libcamera::CameraConfiguration> config;
+    libcamera::Stream *stream;
+    std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers;
+    std::map<libcamera::Stream *, std::vector<std::unique_ptr<libcamera::FrameBuffer>>> frame_buffers;
+    DmaHeap dma_heap_;
     
-    static void requestComplete(libcamera::Request*);
+    void requestComplete(libcamera::Request*);
 
     public:
-
-    static CaptureMode capture_mode; 
-    static std::shared_ptr<FrameManager> frame_manager;
-    static std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
-    static std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
-    static unsigned int stride; // for correct YUV decoding
+    PiCamera() {}
+    CaptureMode capture_mode; 
+    std::shared_ptr<FrameManager> frame_manager;
+    std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
+    std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
+    unsigned int stride; // for correct YUV decoding
     
-    static void Initialize();
-    static void AllocateBuffers();
-    static std::shared_ptr<libcamera::Camera> GetCamera();
-    static void ConfigureViewfinder();
-    static void ConfigureStillCapture();
-    static void StartCamera();
-    static void StartViewfinder();
-    static void StartStillCapture();
-    static void StopCamera();
-    static void SetFrameManager(std::shared_ptr<FrameManager>);
-    static void Cleanup();
-    static void MapBuffers();
-    static void Configure();
-    static void CreateRequests();
+    void Initialize();
+    void AllocateBuffers();
+    std::shared_ptr<libcamera::Camera> GetCamera();
+    void ConfigureViewfinder();
+    void ConfigureStillCapture();
+    void StartCamera();
+    void StartViewfinder();
+    void StartStillCapture();
+    void StopCamera();
+    void SetFrameManager(std::shared_ptr<FrameManager>);
+    void Cleanup();
+    void MapBuffers();
+    void Configure();
+    void CreateRequests();
 };
 
 #endif // CPP_PICAMERA_HPP

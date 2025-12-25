@@ -31,7 +31,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -39,7 +39,7 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <iostream>
+//#include <iostream>
 #include <memory>
 #include <thread>
 #include <gbm.h>
@@ -107,6 +107,8 @@ float quad[] = {
 
 const int screen_width = 640;
 const int screen_height = 480;
+
+PiCamera picamera = new PiCamera();
 
 
 /*
@@ -819,7 +821,7 @@ static void checkGlCompileErrors(GLuint shader)
     {
         GLchar infoLog[512];
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        std::cerr << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
+        LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
     }
 }
 
@@ -869,9 +871,9 @@ int main(int argc, char **argv)
 
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-	PiCamera::Initialize();
-    //PiCamera::StartViewfinder();
-	PiCamera::SetFrameManager(frame_manager);
+	picamera.Initialize();
+    //picamera.StartViewfinder();
+	picamera.SetFrameManager(frame_manager);
 
     /* check which DRM device to open */
     if (argc > 1)
@@ -1047,17 +1049,17 @@ int main(int argc, char **argv)
     {
         GLchar infoLog[512];
         glGetShaderInfoLog(yuv2rgb_frag, 512, NULL, infoLog);
-        std::cerr << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
+        LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
     }
 
     glAttachShader(yuv2rgb_program, yuv2rgb_frag);
     glAttachShader(yuv2rgb_program, yuv2rgb_vert);
     glLinkProgram(yuv2rgb_program);
-    std::cout << "link yuv2rgb shader: " << glGetError() << std::endl;
+    LOG << "link yuv2rgb shader: " << glGetError() << std::endl;
 
     //glDeleteShader(yuv2rgb_frag);
     //glDeleteShader(yuv2rgb_vert);
-    std::cout << "creating YUV to RGB program: " << glGetError() << std::endl;
+    LOG << "creating YUV to RGB program: " << glGetError() << std::endl;
 
 glValidateProgram(yuv2rgb_program);
 
@@ -1066,10 +1068,10 @@ glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
 if (!valid) {
     GLchar infoLog[1024];
     glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-    std::cerr << "Validation error:\n" << infoLog << std::endl;
+    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
 }
     glUseProgram(yuv2rgb_program);
-     std::cout << "Using yuv program: " << glGetError() << std::endl;
+     LOG << "Using yuv program: " << glGetError() << std::endl;
 
    
     yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
@@ -1094,7 +1096,7 @@ if (!valid) {
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     glUniform1i(lutTextureLoc, 1);
 
-    std::cout << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
+    LOG << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
     glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
 
 
@@ -1116,9 +1118,9 @@ if (!valid) {
 
     glAttachShader(program, frag);
     glAttachShader(program, vert);
-    std::cout << "attaching shaders: " << glGetError() << std::endl;
+    LOG << "attaching shaders: " << glGetError() << std::endl;
     glLinkProgram(program);
-    std::cout << "linking program: " << glGetError() << std::endl;
+    LOG << "linking program: " << glGetError() << std::endl;
     glUseProgram(program);
 
     //glDeleteShader(frag);
@@ -1126,7 +1128,7 @@ if (!valid) {
 
     size_t image_size = test_width * test_height * 4; // RGBA
 
-    std::cout << "Set Image Size: " << test_width << ", " << test_height << std::endl;
+    LOG << "Set Image Size: " << test_width << ", " << test_height << std::endl;
 
     // setup texture for input images (from camera)
     glGenTextures(1, &test_texture); 
@@ -1182,10 +1184,10 @@ if (!valid) {
     // load lut image 
     int lut_width, lut_height, lut_depth, lut_nrChannels;
     unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
-    std::cout << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
+    LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
     if (!lut_data)
     {
-        std::cout << "Failed to load texture" << std::endl;
+        LOG << "Failed to load texture" << std::endl;
         return 0;
     }
 
@@ -1219,7 +1221,7 @@ if (!valid) {
     stbi_image_free(lut_data);
 
 
-    std::cout << "before setting uniforms: " << glGetError() << std::endl;
+    LOG << "before setting uniforms: " << glGetError() << std::endl;
     // Set uniforms
     glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
@@ -1227,7 +1229,7 @@ if (!valid) {
 	unsigned int trans_loc = glGetUniformLocation(program, "transform");
 	glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
 
-    std::cout << "after setting uniforms: " << glGetError() << std::endl;
+    LOG << "after setting uniforms: " << glGetError() << std::endl;
 
     // create fbo bound to output 
     //unsigned int dstFBO, dstTex;
@@ -1246,17 +1248,17 @@ if (!valid) {
 
         case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
         // Attached image has width/height of 0
-        std::cout << "incomplete" << std::endl;
+        LOG << "incomplete" << std::endl;
         break;
 		
     	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
         // No images attached to FBO
-    	std::cout << "missing attachemnt" << std::endl;
+    	LOG << "missing attachemnt" << std::endl;
         break;
 
     	case GL_FRAMEBUFFER_UNSUPPORTED:
         // Format combination not supported
-    	std::cout << "unsupported" << std::endl;
+    	LOG << "unsupported" << std::endl;
         break;
 
     	default:
@@ -1283,8 +1285,8 @@ if (!valid) {
     glEnableVertexAttribArray(uvLoc);
     glBindBuffer(GL_ARRAY_BUFFER,0);
 
-    std::cout << "after running gL program: " << glGetError() << std::endl;
-    std::cout << "image_size: " << image_size << std::endl;
+    LOG << "after running gL program: " << glGetError() << std::endl;
+    LOG << "image_size: " << image_size << std::endl;
 
   
     // Bind textures
@@ -1294,10 +1296,10 @@ if (!valid) {
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
-    std::cout << "after binding textures: " << glGetError() << std::endl;
+    LOG << "after binding textures: " << glGetError() << std::endl;
 
-	PiCamera::StartCamera();
-    //PiCamera::CreateRequests();
+	picamera.StartCamera();
+    //picamera.CreateRequests();
     
     int once = 0;
     bool capture_started = false;
@@ -1310,12 +1312,12 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     while(once < 1000) {
 
         if (once == 100) {
-            std::cout << "Frame: " << once << std::endl;
-            std::cout << "Starting Capture..." << std::endl;
+            LOG << "Frame: " << once << std::endl;
+            LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
-            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + PiCamera::stride*test_height;
-            std::vector<uint8_t>::const_iterator u_end = y_end + PiCamera::stride*test_height/4;
+            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + picamera.stride*test_height;
+            std::vector<uint8_t>::const_iterator u_end = y_end + picamera.stride*test_height/4;
             std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
 
             std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
@@ -1323,13 +1325,13 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             std::vector<uint8_t> v_data(u_end, v_end); 
             std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
 
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, PiCamera::stride);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera.stride);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
             glBindTexture(GL_TEXTURE_2D, y_texture);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
 
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, PiCamera::stride/2);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera.stride/2);
 
             glBindTexture(GL_TEXTURE_2D, u_texture);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
@@ -1342,13 +1344,13 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             glBindTexture(GL_TEXTURE_2D, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
-std::cout << "Program ID: " << yuv2rgb_program << std::endl;
+LOG << "Program ID: " << yuv2rgb_program << std::endl;
 if (yuv2rgb_program == 0) {
-    std::cerr << "ERROR: Program ID is 0 (not created)" << std::endl;
+    LOG_ERR << "ERROR: Program ID is 0 (not created)" << std::endl;
 }
 
 GLboolean isProgram = glIsProgram(yuv2rgb_program);
-std::cout << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
+LOG << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
 glValidateProgram(yuv2rgb_program);
 
 GLint valid;
@@ -1356,10 +1358,10 @@ glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
 if (!valid) {
     GLchar infoLog[1024];
     glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-    std::cerr << "Validation error:\n" << infoLog << std::endl;
+    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
 }
             glUseProgram(yuv2rgb_program);
-            std::cout << "Use program: " << glGetError() << std::endl;
+            LOG << "Use program: " << glGetError() << std::endl;
             
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, y_texture);
@@ -1393,7 +1395,7 @@ if (!valid) {
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
 			else {
-				std::cout << "full frame pointer fail" << std::endl;
+				LOG << "full frame pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -1403,10 +1405,9 @@ if (!valid) {
         }
         
         if (frame_manager->data_available()) {
-            std::cout << "Frame: " << once << std::endl;
+            LOG << "Frame: " << once << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
-	        //std::cout<< "new frame size: " << vec_frame.size() << std::endl;
 
             // Provide buffer to write to
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
@@ -1418,9 +1419,8 @@ if (!valid) {
                 glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
             }
             else {
-                std::cout << "camera ptr error" << std::endl;
+                LOG << "camera ptr error" << std::endl;
             }
-            //std::cout << "input pbo mapped: " << ptr << std::endl;
 
             glUseProgram(program);
 
@@ -1463,7 +1463,7 @@ if (!valid) {
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
 			else {
-				std::cout << "full frame pointer fail" << std::endl;
+				LOG << "full frame pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -1481,7 +1481,7 @@ if (!valid) {
 				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			}
 			else {
-				std::cout << "drm pointer fail" << std::endl;
+				LOG << "drm pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             once++;
