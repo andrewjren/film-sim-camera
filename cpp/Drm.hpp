@@ -46,7 +46,6 @@
 
 namespace {
 
-int device;
 uint32_t connectorId;
 drmModeModeInfo mode;
 drmModeCrtc *crtc;
