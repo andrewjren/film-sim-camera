@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <memory>
 #include <thread>
+#include <iostream> // TODO: Remove and create a logger class
 #include <libcamera/libcamera.h>
 #include <FrameManager.hpp>
 #include "dma_heaps.hpp"
