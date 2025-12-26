@@ -7,6 +7,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(DRM REQUIRED libdrm)
 pkg_check_modules(LIBCAMERA REQUIRED libcamera)
 pkg_check_modules(GBM REQUIRED gbm)
+pkg_search_module(LIBEVDEV REQUIRED libevdev)
 
 find_package(OpenGL REQUIRED COMPONENTS EGL GLES2 GLES3)
 #ldrm -lgbm -lEGL -lGLESv2 -I/usr/include/libdrm -I/usr/include/GLES2
@@ -25,13 +26,14 @@ target_link_libraries(libpicamera PUBLIC
   ${LIBCAMERA_LINK_LIBRARIES}
   )
 
-add_executable(camdrm camdrm.cpp dma_heaps.cpp)
+add_executable(camdrm camdrm.cpp dma_heaps.cpp )
 target_include_directories(camdrm PRIVATE 
   ${DRM_INCLUDE_DIRS} 
   #${LIBCAMERA_INCLUDE_DIRS} 
   ${OPENGL_EGL_INCLUDE_DIRS}
   ${OPENGL_INCLUDE_DIRS}
   ${GBM_INCLUDE_DIRS}
+  ${LIBEVDEV_INCLUDE_DIRS}
   ${CMAKE_CURRENT_SOURCE_DIR}
   )
 
@@ -42,6 +44,7 @@ target_link_libraries(camdrm PRIVATE
   OpenGL::EGL 
   OpenGL::GLES3
   ${GBM_LINK_LIBRARIES}
+  ${LIBEVDEV_LIBRARIES}
   #glm::glm-header-only
   libpicamera
   )

@@ -21,6 +21,7 @@
 #include <FrameManager.hpp>
 #include <log.hpp>
 #include <Drm.hpp>
+#include <Touchscreen.hpp>
 
 /*
 int device;
@@ -283,10 +284,17 @@ int main(int argc, char **argv)
     //picamera.StartViewfinder();
 	picamera->SetFrameManager(frame_manager);
 
+    if (argc < 2) {
+        LOG << "not enough arguments\n";
+        return -1;
+    }
+    std::unique_ptr<Touchscreen> touchscreen(new Touchscreen(argv[1]));
+    //touchscreen->PollEvents();
+
     /* check which DRM device to open */
-    if (argc > 1)
-        card = argv[1];
-    else
+//    if (argc > 1)
+//        card = argv[1];
+//    else
         card = "/dev/dri/card1";
 
     fprintf(stderr, "using card '%s'\n", card);
@@ -710,16 +718,20 @@ if (!valid) {
     //picamera.CreateRequests();
     
     int once = 0;
-    bool capture_started = false;
+    bool photo_requested = false;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
     std::vector<uint8_t> cap_frame;
     cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
+
     while(once < 1000) {
 
-        if (once == 100) {
+        touchscreen->PollEvents();
+        photo_requested = touchscreen->ProcessPhotoRequest();
+
+        if (photo_requested) {
             LOG << "Frame: " << once << std::endl;
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
