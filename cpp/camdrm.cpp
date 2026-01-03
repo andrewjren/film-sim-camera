@@ -39,9 +39,10 @@ static int test_width, test_height, test_nrChannels;
 static unsigned int dstFBO, dstTex;
 static unsigned int lut_texture;
 static unsigned int test_texture;
-static unsigned int input_pbo;
+static unsigned int input_pbo[3];
 static unsigned int lut_pbo;
-static unsigned int output_pbo;
+static unsigned int output_pbo[3];
+static const unsigned int num_buffers = 3;
 static unsigned int y_texture, u_texture, v_texture;
 static unsigned int rgb_pbo;
 static unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
@@ -555,16 +556,20 @@ if (!valid) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // setup pbo for input images (from camera)
-    glGenBuffers(1, &input_pbo);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
+    for (int i = 0; i < num_buffers; i++) {
+        glGenBuffers(1, &input_pbo[i]);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[i]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
+    }
 
     // setup pbo for output image (to screen)
-    glGenBuffers(1, &output_pbo);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-    glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+    for (int i = 0; i < num_buffers; i++) {
+        glGenBuffers(1, &output_pbo[i]);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[i]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+    }
 
     // setup texture for YUV input images (from camera)
     glGenTextures(1, &y_texture);
@@ -705,34 +710,47 @@ if (!valid) {
     LOG << "image_size: " << image_size << std::endl;
 
   
-    // Bind textures
+    // Bind textures before rendering
     glViewport(0,0,test_width,test_height);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
-    LOG << "after binding textures: " << glGetError() << std::endl;
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
+
+   LOG << "after binding textures: " << glGetError() << std::endl;
 
 	picamera->StartCamera();
     //picamera.CreateRequests();
     
-    int once = 0;
+    // initialize variables
+    int num_frame = 0;
     bool photo_requested = false;
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(test_width * test_height * 4);
     std::vector<uint8_t> cap_frame;
     cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
+    int read_index;
+    int write_index;
 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 
-    while(once < 1000) {
+    while(num_frame < 1000) {
 
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
+        write_index = num_frame % num_buffers;
+        read_index = (num_frame + num_buffers - 1) % num_buffers; // previous frame
+        
 
         if (photo_requested) {
-            LOG << "Frame: " << once << std::endl;
+            LOG << "Frame: " << num_frame << std::endl;
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
@@ -748,20 +766,23 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-            glBindTexture(GL_TEXTURE_2D, y_texture);
+            //glBindTexture(GL_TEXTURE_2D, y_texture);
+            glActiveTexture(GL_TEXTURE2);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
 
             glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride/2);
 
-            glBindTexture(GL_TEXTURE_2D, u_texture);
+            //glBindTexture(GL_TEXTURE_2D, u_texture);
+            glActiveTexture(GL_TEXTURE3);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
 
-            glBindTexture(GL_TEXTURE_2D, v_texture);
+            //glBindTexture(GL_TEXTURE_2D, v_texture);
+            glActiveTexture(GL_TEXTURE4);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
 
-            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            //glBindTexture(GL_TEXTURE_3D, lut_texture);
 
-            glBindTexture(GL_TEXTURE_2D, 0);
+            //glBindTexture(GL_TEXTURE_2D, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
 LOG << "Program ID: " << yuv2rgb_program << std::endl;
@@ -783,27 +804,27 @@ if (!valid) {
             glUseProgram(yuv2rgb_program);
             LOG << "Use program: " << glGetError() << std::endl;
             
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, y_texture);
+            glActiveTexture(GL_TEXTURE2);
+            //glBindTexture(GL_TEXTURE_2D, y_texture);
             glUniform1i(yTextureLoc, 0);
 
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, u_texture);
+            glActiveTexture(GL_TEXTURE3);
+            //glBindTexture(GL_TEXTURE_2D, u_texture);
             glUniform1i(uTextureLoc, 1);
 
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, v_texture);
+            glActiveTexture(GL_TEXTURE4);
+            //glBindTexture(GL_TEXTURE_2D, v_texture);
             glUniform1i(vTextureLoc, 2);
 
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            glActiveTexture(GL_TEXTURE1);
+            //glBindTexture(GL_TEXTURE_3D, lut_texture);
             glUniform1i(lutTextureLoc, 3);
 
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
             // Read Framebuffer
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]); // TODO: new pbo for captured frame data?
             glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
@@ -821,17 +842,17 @@ if (!valid) {
 
 
             stbi_write_png("debug-capture.png", test_width, test_height, 4, rgb_out.data(), test_width*4);
-            once++;
+            num_frame++;
         }
         
         if (frame_manager->data_available()) {
-            LOG << "Frame: " << once << std::endl;
+            LOG << "Frame: " << num_frame << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
 
             // Provide buffer to write to
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo);
-            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT);
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
+            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
             //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
             if (ptr) {
                 memcpy(ptr, vec_frame.data(), vec_frame.size());
@@ -845,10 +866,11 @@ if (!valid) {
             glUseProgram(program);
 
             // Transfer to texture
-            glBindTexture(GL_TEXTURE_2D, test_texture);
+            //glBindTexture(GL_TEXTURE_2D, test_texture);
+            glActiveTexture(GL_TEXTURE0);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-            glBindTexture(GL_TEXTURE_2D, 0);
+            //glBindTexture(GL_TEXTURE_2D, 0);
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
             // Render to Framebuffer
@@ -857,26 +879,26 @@ if (!valid) {
 
             //glUseProgram(program);
 
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, test_texture);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_3D, lut_texture);
+            //glActiveTexture(GL_TEXTURE0);
+            //glBindTexture(GL_TEXTURE_2D, test_texture);
+            //glActiveTexture(GL_TEXTURE1);
+            //glBindTexture(GL_TEXTURE_3D, lut_texture);
 
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-            glBindTexture(GL_TEXTURE_2D, 0);
-            glBindTexture(GL_TEXTURE_3D, 0);
+            //glBindTexture(GL_TEXTURE_2D, 0);
+            //glBindTexture(GL_TEXTURE_3D, 0);
 
             // Read Framebuffer
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
-            glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            //glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
+            //glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+            //ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
 
-			std::vector<unsigned char> full_frame(test_width*test_height* 4);
+			//std::vector<unsigned char> full_frame(test_width*test_height* 4);
 			std::vector<unsigned char> drm_preview(640*480*4);
-			if (ptr) {
+			/*if (ptr) {
 				// Get data out of buffer
 				memcpy(full_frame.data(), ptr, test_width * test_height * 4);
 				//stbi_write_png("debug-output.png", test_width, test_height, 4, full_frame.data(), test_width*4);
@@ -886,9 +908,9 @@ if (!valid) {
 				LOG << "full frame pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-
+*/
 			// Read Framebuffer for DRM preview
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
             glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
@@ -904,7 +926,7 @@ if (!valid) {
 				LOG << "drm pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            once++;
+            num_frame++;
 			
 			
         }
