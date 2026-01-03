@@ -739,7 +739,7 @@ if (!valid) {
     int read_index;
     int write_index;
 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
+std::vector<unsigned char> drm_preview(640*480*4);
 
     while(num_frame < 1000) {
 
@@ -766,23 +766,17 @@ glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-            //glBindTexture(GL_TEXTURE_2D, y_texture);
             glActiveTexture(GL_TEXTURE2);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
 
             glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride/2);
 
-            //glBindTexture(GL_TEXTURE_2D, u_texture);
             glActiveTexture(GL_TEXTURE3);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
 
-            //glBindTexture(GL_TEXTURE_2D, v_texture);
             glActiveTexture(GL_TEXTURE4);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
 
-            //glBindTexture(GL_TEXTURE_3D, lut_texture);
-
-            //glBindTexture(GL_TEXTURE_2D, 0);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
 LOG << "Program ID: " << yuv2rgb_program << std::endl;
@@ -805,19 +799,15 @@ if (!valid) {
             LOG << "Use program: " << glGetError() << std::endl;
             
             glActiveTexture(GL_TEXTURE2);
-            //glBindTexture(GL_TEXTURE_2D, y_texture);
             glUniform1i(yTextureLoc, 0);
 
             glActiveTexture(GL_TEXTURE3);
-            //glBindTexture(GL_TEXTURE_2D, u_texture);
             glUniform1i(uTextureLoc, 1);
 
             glActiveTexture(GL_TEXTURE4);
-            //glBindTexture(GL_TEXTURE_2D, v_texture);
             glUniform1i(vTextureLoc, 2);
 
             glActiveTexture(GL_TEXTURE1);
-            //glBindTexture(GL_TEXTURE_3D, lut_texture);
             glUniform1i(lutTextureLoc, 3);
 
             glBindVertexArray(vao);
@@ -866,53 +856,22 @@ if (!valid) {
             glUseProgram(program);
 
             // Transfer to texture
-            //glBindTexture(GL_TEXTURE_2D, test_texture);
             glActiveTexture(GL_TEXTURE0);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-            //glBindTexture(GL_TEXTURE_2D, 0);
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
             // Render to Framebuffer
             glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
             glViewport(0,0,test_width,test_height);
 
-            //glUseProgram(program);
-
-            //glActiveTexture(GL_TEXTURE0);
-            //glBindTexture(GL_TEXTURE_2D, test_texture);
-            //glActiveTexture(GL_TEXTURE1);
-            //glBindTexture(GL_TEXTURE_3D, lut_texture);
-
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-            //glBindTexture(GL_TEXTURE_2D, 0);
-            //glBindTexture(GL_TEXTURE_3D, 0);
-
-            // Read Framebuffer
-            //glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
-            //glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-            //ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
-
-			//std::vector<unsigned char> full_frame(test_width*test_height* 4);
-			std::vector<unsigned char> drm_preview(640*480*4);
-			/*if (ptr) {
-				// Get data out of buffer
-				memcpy(full_frame.data(), ptr, test_width * test_height * 4);
-				//stbi_write_png("debug-output.png", test_width, test_height, 4, full_frame.data(), test_width*4);
-				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-			}
-			else {
-				LOG << "full frame pointer fail" << std::endl;
-			}
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-*/
+			//std::vector<unsigned char> drm_preview(640*480*4);
 			// Read Framebuffer for DRM preview
             glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
             glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
 
 			if (ptr) {
