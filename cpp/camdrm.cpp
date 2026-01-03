@@ -22,7 +22,7 @@
 #include <log.hpp>
 #include <Drm.hpp>
 #include <Touchscreen.hpp>
-
+#include <chrono>
 /*
 int device;
 uint32_t connectorId;
@@ -743,6 +743,7 @@ std::vector<unsigned char> drm_preview(640*480*4);
 
     while(num_frame < 1000) {
 
+            std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
         write_index = num_frame % num_buffers;
@@ -885,6 +886,10 @@ if (!valid) {
 				LOG << "drm pointer fail" << std::endl;
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+
+            std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
+            LOG << "Frame Time: " << elapsed_ms.count() << "\n";
             num_frame++;
 			
 			
