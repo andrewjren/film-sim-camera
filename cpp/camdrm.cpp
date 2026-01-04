@@ -738,8 +738,9 @@ if (!valid) {
     cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
     int read_index;
     int write_index;
-glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-std::vector<unsigned char> drm_preview(640*480*4);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    std::vector<unsigned char> drm_preview(640*480*4);
+    std::vector<unsigned char> rgb_out(test_width*test_height* 4);
 
     while(num_frame < 1000) {
 
@@ -747,7 +748,7 @@ std::vector<unsigned char> drm_preview(640*480*4);
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
         write_index = num_frame % num_buffers;
-        read_index = (num_frame + num_buffers - 1) % num_buffers; // previous frame
+        read_index = (num_frame + num_buffers - 2) % num_buffers; // previous frame
         
 
         if (photo_requested) {
@@ -800,16 +801,16 @@ if (!valid) {
             LOG << "Use program: " << glGetError() << std::endl;
             
             glActiveTexture(GL_TEXTURE2);
-            glUniform1i(yTextureLoc, 0);
+            glUniform1i(yTextureLoc, 2);
 
             glActiveTexture(GL_TEXTURE3);
-            glUniform1i(uTextureLoc, 1);
+            glUniform1i(uTextureLoc, 3);
 
             glActiveTexture(GL_TEXTURE4);
-            glUniform1i(vTextureLoc, 2);
+            glUniform1i(vTextureLoc, 4);
 
-            glActiveTexture(GL_TEXTURE1);
-            glUniform1i(lutTextureLoc, 3);
+            //glActiveTexture(GL_TEXTURE1);
+            //glUniform1i(lutTextureLoc, 1);
 
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -820,7 +821,6 @@ if (!valid) {
             //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
 
-			std::vector<unsigned char> rgb_out(test_width*test_height* 4);
 			if (ptr) {
 				// Get data out of buffer
 				memcpy(rgb_out.data(), ptr, test_width * test_height * 4);
