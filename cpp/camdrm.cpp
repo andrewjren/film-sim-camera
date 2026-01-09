@@ -887,6 +887,14 @@ if (!valid) {
 			}
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
+/* testing for GBM
+            eglSwapBuffers(display, surface);
+            struct gbm_bo * gbm_buffer_object = gbm_surface_lock_front_buffer(gbmSurface);
+            int fb_id = get_drm_fb_for_bo(gbm_buffer_object);
+            drmModePageFlip(fd, iter->crtc, fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+
+            gbm_surface_release_buffer(gbmSurface, gbm_buffer_object);
+*/
 
             std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
             LOG << "Frame Time: " << elapsed_ms.count() << "\n";
