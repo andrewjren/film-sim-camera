@@ -23,6 +23,8 @@
 #include <Drm.hpp>
 #include <Touchscreen.hpp>
 #include <chrono>
+#include <string>
+#include <filesystem>
 /*
 int device;
 uint32_t connectorId;
@@ -52,6 +54,52 @@ static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
 static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
+int lut_width, lut_height, lut_depth, lut_nrChannels;
+std::string lut_dir = "/home/andrew/codac/lut/";
+std::vector<std::filesystem::path> lut_files;
+
+
+// OpenGL Helper Functions
+void load_lut(int index) {
+    unsigned char *lut_data = stbi_load(lut_files[index].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
+    LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
+    LOG << "Loading texture: " << lut_files[index].filename() << "\n";
+    if (!lut_data)
+    {
+        LOG << "Failed to load texture" << std::endl;
+        return;
+    }
+
+    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
+    // setup lut texture
+    glGenTextures(1, &lut_texture); 
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_3D, 0);
+
+    // setup pbo for lut 
+    glGenBuffers(1, &lut_pbo);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+    memcpy(ptr, lut_data, lut_size);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_3D, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    stbi_image_free(lut_data);
+}
+
 
 // Setup full screen quad
 float quad[] = {
@@ -478,17 +526,7 @@ int main(int argc, char **argv)
     //glDeleteShader(yuv2rgb_vert);
     LOG << "creating YUV to RGB program: " << glGetError() << std::endl;
 
-glValidateProgram(yuv2rgb_program);
-
-GLint valid;
-glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
-if (!valid) {
-    GLchar infoLog[1024];
-    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
-}
     glUseProgram(yuv2rgb_program);
-     LOG << "Using yuv program: " << glGetError() << std::endl;
 
    
     yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
@@ -515,6 +553,18 @@ if (!valid) {
 
     LOG << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
     glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
+
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+    GLchar infoLog[1024];
+    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
+}
+    glUseProgram(yuv2rgb_program);
+     LOG << "Using yuv program: " << glGetError() << std::endl;
 
 
 
@@ -603,8 +653,13 @@ if (!valid) {
 
 
     // load lut image 
-    int lut_width, lut_height, lut_depth, lut_nrChannels;
-    unsigned char *lut_data = stbi_load("Fuji Velvia 50.png", &lut_width, &lut_height, &lut_nrChannels, 0); 
+    for (const auto & entry : std::filesystem::directory_iterator(lut_dir)) {
+        LOG << entry.path() << "\n";
+        lut_files.push_back(entry.path());
+    }
+    load_lut(0);
+/*
+    unsigned char *lut_data = stbi_load(lut_files[0].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
     LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
     if (!lut_data)
     {
@@ -640,6 +695,7 @@ if (!valid) {
     glBindTexture(GL_TEXTURE_3D, 0);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     stbi_image_free(lut_data);
+*/
 
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
@@ -741,7 +797,8 @@ if (!valid) {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     std::vector<unsigned char> drm_preview(640*480*4);
     std::vector<unsigned char> rgb_out(test_width*test_height* 4);
-
+    void* ptr; 
+    int lut_index = 0;
     while(num_frame < 1000) {
 
             std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
@@ -833,6 +890,8 @@ if (!valid) {
 
 
             stbi_write_png("debug-capture.png", test_width, test_height, 4, rgb_out.data(), test_width*4);
+            lut_index = (lut_index + 1) % lut_files.size(); 
+            load_lut(lut_index);
             num_frame++;
         }
         
