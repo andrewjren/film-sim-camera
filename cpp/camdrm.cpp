@@ -23,8 +23,13 @@
 #include <Drm.hpp>
 #include <Touchscreen.hpp>
 #include <chrono>
+
+// EGL
 #include <string>
 #include <filesystem>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 /*
 int device;
 uint32_t connectorId;
@@ -55,9 +60,15 @@ static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
 int lut_width, lut_height, lut_depth, lut_nrChannels;
-std::string lut_dir = "/home/andrew/codac/lut/";
+std::string lut_dir = std::string(std::getenv("HOME")) + "/codac/lut/";
 std::vector<std::filesystem::path> lut_files;
+std::string viewfinder_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_vs.glsl";
+std::string viewfinder_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_fs.glsl";
+std::string stillcapture_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_vs.glsl";
+std::string stillcapture_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_fs.glsl";
 
+//forward declaration that will be removed
+static void checkGlCompileErrors(GLuint);
 
 // OpenGL Helper Functions
 void load_lut(int index) {
@@ -101,6 +112,28 @@ void load_lut(int index) {
 }
 
 
+void load_shader(GLuint &shader, const std::string &filename) {
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        LOG_ERR << "Failed to open shader file " << filename << "\n";
+        return;
+    }
+
+    std::stringstream buffer;
+    buffer << infile.rdbuf();
+    std::string source = buffer.str();
+    infile.close();
+
+    if (source.empty()) {
+        LOG_ERR << "Shader file " << filename << " was empty\n";
+    }
+    
+    const char* shader_code = source.c_str();
+    glShaderSource(shader, 1, &shader_code, NULL);
+    glCompileShader(shader);
+    checkGlCompileErrors(shader);
+}
+
 // Setup full screen quad
 float quad[] = {
   -1, -1, 0, 0,
@@ -111,7 +144,6 @@ float quad[] = {
 
 const int screen_width = 640;
 const int screen_height = 480;
-
 
 // Get the EGL error back as a string. Useful for debugging.
 static const char *eglGetErrorStr()
@@ -500,14 +532,19 @@ int main(int argc, char **argv)
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
     yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(yuv2rgb_vert, 1, &yuv2rgb_vertex_shader_code, NULL);
-    glCompileShader(yuv2rgb_vert);
-    checkGlCompileErrors(yuv2rgb_vert);
+//    glShaderSource(yuv2rgb_vert, 1, &yuv2rgb_vertex_shader_code, NULL);
+//    glCompileShader(yuv2rgb_vert);
+//    checkGlCompileErrors(yuv2rgb_vert);
+    load_shader(yuv2rgb_vert, stillcapture_vs_path.c_str());
 
     yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(yuv2rgb_frag, 1, &yuv2rgb_fragment_shader_code, NULL);
-    glCompileShader(yuv2rgb_frag);
-    checkGlCompileErrors(yuv2rgb_frag);
+    load_shader(yuv2rgb_frag, stillcapture_fs_path.c_str());
+//    glShaderSource(yuv2rgb_frag, 1, &yuv2rgb_fragment_shader_code, NULL);
+//    glCompileShader(yuv2rgb_frag);
+//    checkGlCompileErrors(yuv2rgb_frag);
+
+
+
     GLint isCompiled = 0;
     glGetShaderiv(yuv2rgb_frag, GL_COMPILE_STATUS, &isCompiled);
     if(isCompiled == GL_FALSE)
@@ -574,14 +611,19 @@ if (!valid) {
     // Read an OpenGL tutorial to properly implement shader creation
     program = glCreateProgram();
     vert = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vert, 1, &vertexShaderCode, NULL);
-    glCompileShader(vert);
-    checkGlCompileErrors(vert);
+    load_shader(vert, viewfinder_vs_path.c_str());
+    //const char* viewfinder_vs_code = load_file(viewfinder_vs_path.c_str());
+    //LOG << viewfinder_vs_code << "\n";
+    //glShaderSource(vert, 1, &viewfinder_vs_code, NULL);
+    //glCompileShader(vert);
+    //checkGlCompileErrors(vert);
+    
 
     frag = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(frag, 1, &fragmentShaderCode, NULL);
-    glCompileShader(frag);
-    checkGlCompileErrors(frag);
+    load_shader(frag, viewfinder_fs_path.c_str());
+    //glShaderSource(frag, 1, &viewfinder_fs_code, NULL);
+    //glCompileShader(frag);
+    //checkGlCompileErrors(frag);
 
     glAttachShader(program, frag);
     glAttachShader(program, vert);
