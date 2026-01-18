@@ -199,92 +199,6 @@ static const char *eglGetErrorStr()
     return "Unknown error!";
 }
 
-// The following are GLSL shaders for rendering a triangle on the screen
-//#define STRINGIFY(x) #x
-static const char *vertexShaderCode = R"(
-#version 300 es
-in vec2 aPos;
-in vec2 aTexCoord;
-out vec2 TexCoord;
-uniform mat4 transform;
-void main() {
-	gl_Position = transform * vec4(aPos, 0.0, 1.0);
-    TexCoord = aTexCoord;
-}
-)";
-
-static const char *fragmentShaderCode = R"(
-#version 300 es
-precision highp float;
-precision highp sampler3D;
-uniform sampler2D image;
-uniform sampler3D clut;
-in vec2 TexCoord;
-out vec4 fragColor;
-
-void main()
-{
-    vec4 color;
-    color = texture(image, TexCoord);
-    color = texture(clut, color.rgb);
-    fragColor = color;
-}
-)";
-
-static const char *yuv2rgb_vertex_shader_code = R"(
-#version 300 es
-in vec2 aPos;
-in vec2 aTexCoord;
-out vec2 TexCoord;
-uniform mat4 rotate;
-
-void main()
-{
-    gl_Position = rotate * vec4(aPos, 0.0, 1.0);
-    TexCoord = aTexCoord;
-}
-)";
-
-static const char *yuv2rgb_fragment_shader_code = R"(
-#version 300 es
-precision highp float;
-precision highp sampler3D;
-in vec2 TexCoord;
-out vec4 fragColor;
-uniform sampler2D yTexture;
-uniform sampler2D uTexture;
-uniform sampler2D vTexture;
-uniform sampler3D clut;
-
-void main()
-{
-    float y = texture(yTexture, TexCoord).r;
-    float u = texture(uTexture, TexCoord).r - 0.5;
-    float v = texture(vTexture, TexCoord).r - 0.5;
-    
-    //YUV to RGB conversion matrix (BT.601)
-    //Note that opengl defines columns first, so the first three elements are in column 1
-    mat3 yuvToRgb = mat3(
-        1.000, 1.000, 1.000,
-        0.000, -0.3441, 1.7720,
-        1.4020, -0.7141, 0.000
-    );
-
-    // BT.709 (HDTV standard)
-    //mat3 yuvToRgb = mat3(
-    //    1.000,  0.000,  1.5748,
-    //    1.000, -0.1873, -0.4681,
-    //    1.000,  1.8556,  0.000
-    //);   
-
-    vec3 orig_color;
-    orig_color = yuvToRgb * vec3(y, u, v);
-    
-    // Clamp to valid range
-    orig_color = clamp(orig_color, 0.0, 1.0);
-    fragColor = texture(clut, orig_color);
-}
-)";
 
 
 // The following code was adopted from
@@ -532,16 +446,10 @@ int main(int argc, char **argv)
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
     yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
-//    glShaderSource(yuv2rgb_vert, 1, &yuv2rgb_vertex_shader_code, NULL);
-//    glCompileShader(yuv2rgb_vert);
-//    checkGlCompileErrors(yuv2rgb_vert);
     load_shader(yuv2rgb_vert, stillcapture_vs_path.c_str());
 
     yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
     load_shader(yuv2rgb_frag, stillcapture_fs_path.c_str());
-//    glShaderSource(yuv2rgb_frag, 1, &yuv2rgb_fragment_shader_code, NULL);
-//    glCompileShader(yuv2rgb_frag);
-//    checkGlCompileErrors(yuv2rgb_frag);
 
 
 
@@ -612,18 +520,9 @@ if (!valid) {
     program = glCreateProgram();
     vert = glCreateShader(GL_VERTEX_SHADER);
     load_shader(vert, viewfinder_vs_path.c_str());
-    //const char* viewfinder_vs_code = load_file(viewfinder_vs_path.c_str());
-    //LOG << viewfinder_vs_code << "\n";
-    //glShaderSource(vert, 1, &viewfinder_vs_code, NULL);
-    //glCompileShader(vert);
-    //checkGlCompileErrors(vert);
-    
 
     frag = glCreateShader(GL_FRAGMENT_SHADER);
     load_shader(frag, viewfinder_fs_path.c_str());
-    //glShaderSource(frag, 1, &viewfinder_fs_code, NULL);
-    //glCompileShader(frag);
-    //checkGlCompileErrors(frag);
 
     glAttachShader(program, frag);
     glAttachShader(program, vert);
@@ -700,45 +599,6 @@ if (!valid) {
         lut_files.push_back(entry.path());
     }
     load_lut(0);
-/*
-    unsigned char *lut_data = stbi_load(lut_files[0].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
-    LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
-    if (!lut_data)
-    {
-        LOG << "Failed to load texture" << std::endl;
-        return 0;
-    }
-
-    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
-    // setup lut texture
-    glGenTextures(1, &lut_texture); 
-    glBindTexture(GL_TEXTURE_3D, lut_texture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_3D, 0);
-
-    // setup pbo for lut 
-    glGenBuffers(1, &lut_pbo);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-    memcpy(ptr, lut_data, lut_size);
-    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-
-    glBindTexture(GL_TEXTURE_3D, lut_texture);
-    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    glBindTexture(GL_TEXTURE_3D, 0);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    stbi_image_free(lut_data);
-*/
-
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
     // Set uniforms
