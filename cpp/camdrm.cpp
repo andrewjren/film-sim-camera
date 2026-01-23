@@ -42,7 +42,7 @@ static struct gbm_bo *previousBo = NULL;
 static uint32_t previousFb;
 */
 // added to make render loop easier
-static int test_width, test_height, test_nrChannels;
+static int test_nrChannels;
 static unsigned int dstFBO, dstTex;
 static unsigned int lut_texture;
 static unsigned int test_texture;
@@ -69,6 +69,43 @@ std::string stillcapture_fs_path = std::string(std::getenv("HOME")) + "/codac/sh
 
 //forward declaration that will be removed
 static void checkGlCompileErrors(GLuint);
+static const char *eglGetErrorStr();
+// The following code was adopted from
+// https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
+// and is licensed under the Unlicense.
+static const EGLint configAttribs[] = {
+    EGL_RED_SIZE, 8,
+    EGL_GREEN_SIZE, 8,
+    EGL_BLUE_SIZE, 8,
+    EGL_DEPTH_SIZE, 8,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+    EGL_NONE};
+
+static const EGLint contextAttribs[] = {
+    EGL_CONTEXT_CLIENT_VERSION, 2,
+    EGL_NONE};
+
+static void checkGlCompileErrors(GLuint shader)
+{
+    GLint isCompiled = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
+    if(isCompiled == GL_FALSE)
+    {
+        GLchar infoLog[512];
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
+    }
+}
+
+int desiredWidth = 1296;
+int desiredHeight = 972;
+int test_width = 1296;
+int test_height = 972;
+const int screen_width = 640;
+const int screen_height = 480;
+
+glm::mat4 trans_mat = glm::mat4(1.0f);
+glm::mat4 rot_mat = glm::mat4(1.0f);
 
 // OpenGL Helper Functions
 void load_lut(int index) {
@@ -134,6 +171,119 @@ void load_shader(GLuint &shader, const std::string &filename) {
     checkGlCompileErrors(shader);
 }
 
+int Initialize_OpenGL() {
+    /* OpenGL stuff */ 
+    int major, minor;
+    //GLuint program, vert, frag;
+    GLint colorLoc, result;
+
+    device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
+    if (getDisplay(&display) != 0)
+    {
+        fprintf(stderr, "Unable to get EGL display\n");
+        close(device);
+        return -1;
+    }
+    if (eglInitialize(display, &major, &minor) == EGL_FALSE)
+    {
+        fprintf(stderr, "Failed to get EGL version! Error: %s\n",
+                eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+    // We will use the screen resolution as the desired width and height for the viewport.
+    //int desiredWidth = 1296;
+    //int desiredHeight = 972;
+    //int test_width = 1296;
+    //int test_height = 972;
+
+
+    // Make sure that we can use OpenGL in this EGL app.
+    eglBindAPI(EGL_OPENGL_API);
+
+    printf("Initialized EGL version: %d.%d\n", major, minor);
+
+    EGLint count;
+    EGLint numConfigs;
+    eglGetConfigs(display, NULL, 0, &count);
+    EGLConfig *configs = static_cast<EGLConfig*>(malloc(count * sizeof(configs)));
+
+    if (!eglChooseConfig(display, configAttribs, configs, count, &numConfigs))
+    {
+        fprintf(stderr, "Failed to get EGL configs! Error: %s\n", eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    // I am not exactly sure why the EGL config must match the GBM format.
+    // But it works!
+    int configIndex = matchConfigToVisual(display, GBM_FORMAT_XRGB8888, configs, numConfigs);
+    if (configIndex < 0)
+    {
+        fprintf(stderr, "Failed to find matching EGL config! Error: %s\n", eglGetErrorStr());
+        eglTerminate(display);
+        gbm_surface_destroy(gbmSurface);
+        gbm_device_destroy(gbmDevice);
+        return EXIT_FAILURE;
+    }
+
+    context = eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
+    if (context == EGL_NO_CONTEXT)
+    {
+        fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    surface = eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
+    if (surface == EGL_NO_SURFACE)
+    {
+        fprintf(stderr, "Failed to create EGL surface! Error: %s\n", eglGetErrorStr());
+        eglDestroyContext(display, context);
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    free(configs);
+    eglMakeCurrent(display, surface, surface, context);
+
+    // Set GL Viewport size, always needed!
+    glViewport(0, 0, desiredWidth, desiredHeight);
+
+    // Get GL Viewport size and test if it is correct.
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // viewport[2] and viewport[3] are viewport width and height respectively
+    printf("GL Viewport size: %dx%d\n", viewport[2], viewport[3]);
+
+    if (viewport[2] != desiredWidth || viewport[3] != desiredHeight)
+    {
+        fprintf(stderr, "Error! The glViewport returned incorrect values! Something is wrong!\n");
+        eglDestroyContext(display, context);
+        eglDestroySurface(display, surface);
+        eglTerminate(display);
+        gbmClean();
+        return EXIT_FAILURE;
+    }
+
+    return 1;
+}
+
+void Init_Transformation_Matrix() {
+    // Transformation Matrix
+	float scale = float(screen_width) / float(test_width);
+	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
+	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
+	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
+
+    rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+}
+
 // Setup full screen quad
 float quad[] = {
   -1, -1, 0, 0,
@@ -142,8 +292,6 @@ float quad[] = {
   -1,  1, 0, 1
 };
 
-const int screen_width = 640;
-const int screen_height = 480;
 
 // Get the EGL error back as a string. Useful for debugging.
 static const char *eglGetErrorStr()
@@ -197,35 +345,6 @@ static const char *eglGetErrorStr()
         break;
     }
     return "Unknown error!";
-}
-
-
-
-// The following code was adopted from
-// https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
-// and is licensed under the Unlicense.
-static const EGLint configAttribs[] = {
-    EGL_RED_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_BLUE_SIZE, 8,
-    EGL_DEPTH_SIZE, 8,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-    EGL_NONE};
-
-static const EGLint contextAttribs[] = {
-    EGL_CONTEXT_CLIENT_VERSION, 2,
-    EGL_NONE};
-
-static void checkGlCompileErrors(GLuint shader)
-{
-    GLint isCompiled = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
-    if(isCompiled == GL_FALSE)
-    {
-        GLchar infoLog[512];
-        glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
-    }
 }
 
 
@@ -333,115 +452,9 @@ int main(int argc, char **argv)
                 iter->conn, errno);
     }
 
-
     /* OpenGL stuff */ 
-    int major, minor;
-    //GLuint program, vert, frag;
-    GLint colorLoc, result;
-
-    device = open("/dev/dri/card1", O_RDWR | O_CLOEXEC);
-    if (getDisplay(&display) != 0)
-    {
-        fprintf(stderr, "Unable to get EGL display\n");
-        close(device);
-        return -1;
-    }
-    if (eglInitialize(display, &major, &minor) == EGL_FALSE)
-    {
-        fprintf(stderr, "Failed to get EGL version! Error: %s\n",
-                eglGetErrorStr());
-        eglTerminate(display);
-        gbmClean();
-        return EXIT_FAILURE;
-    }
-    // We will use the screen resolution as the desired width and height for the viewport.
-    int desiredWidth = 1296;
-    int desiredHeight = 972;
-    int test_width = 1296;
-    int test_height = 972;
-
-
-    // Make sure that we can use OpenGL in this EGL app.
-    eglBindAPI(EGL_OPENGL_API);
-
-    printf("Initialized EGL version: %d.%d\n", major, minor);
-
-    EGLint count;
-    EGLint numConfigs;
-    eglGetConfigs(display, NULL, 0, &count);
-    EGLConfig *configs = static_cast<EGLConfig*>(malloc(count * sizeof(configs)));
-
-    if (!eglChooseConfig(display, configAttribs, configs, count, &numConfigs))
-    {
-        fprintf(stderr, "Failed to get EGL configs! Error: %s\n", eglGetErrorStr());
-        eglTerminate(display);
-        gbmClean();
-        return EXIT_FAILURE;
-    }
-
-    // I am not exactly sure why the EGL config must match the GBM format.
-    // But it works!
-    int configIndex = matchConfigToVisual(display, GBM_FORMAT_XRGB8888, configs, numConfigs);
-    if (configIndex < 0)
-    {
-        fprintf(stderr, "Failed to find matching EGL config! Error: %s\n", eglGetErrorStr());
-        eglTerminate(display);
-        gbm_surface_destroy(gbmSurface);
-        gbm_device_destroy(gbmDevice);
-        return EXIT_FAILURE;
-    }
-
-    context = eglCreateContext(display, configs[configIndex], EGL_NO_CONTEXT, contextAttribs);
-    if (context == EGL_NO_CONTEXT)
-    {
-        fprintf(stderr, "Failed to create EGL context! Error: %s\n", eglGetErrorStr());
-        eglTerminate(display);
-        gbmClean();
-        return EXIT_FAILURE;
-    }
-
-    surface = eglCreateWindowSurface(display, configs[configIndex], (EGLNativeWindowType) gbmSurface, NULL);
-    if (surface == EGL_NO_SURFACE)
-    {
-        fprintf(stderr, "Failed to create EGL surface! Error: %s\n", eglGetErrorStr());
-        eglDestroyContext(display, context);
-        eglTerminate(display);
-        gbmClean();
-        return EXIT_FAILURE;
-    }
-
-    free(configs);
-    eglMakeCurrent(display, surface, surface, context);
-
-    // Set GL Viewport size, always needed!
-    glViewport(0, 0, desiredWidth, desiredHeight);
-
-    // Get GL Viewport size and test if it is correct.
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-
-    // viewport[2] and viewport[3] are viewport width and height respectively
-    printf("GL Viewport size: %dx%d\n", viewport[2], viewport[3]);
-
-    if (viewport[2] != desiredWidth || viewport[3] != desiredHeight)
-    {
-        fprintf(stderr, "Error! The glViewport returned incorrect values! Something is wrong!\n");
-        eglDestroyContext(display, context);
-        eglDestroySurface(display, surface);
-        eglTerminate(display);
-        gbmClean();
-        return EXIT_FAILURE;
-    }
-
-	// Transformation Matrix
-	float scale = float(screen_width) / float(test_width);
-	glm::mat4 trans_mat = glm::mat4(1.0f);
-	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
-	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
-	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
-
-    glm::mat4 rot_mat = glm::mat4(1.0f);
-    rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
+    Initialize_OpenGL();
+    Init_Transformation_Matrix();
 	
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
@@ -767,9 +780,6 @@ if (!valid) {
 
             glActiveTexture(GL_TEXTURE4);
             glUniform1i(vTextureLoc, 4);
-
-            //glActiveTexture(GL_TEXTURE1);
-            //glUniform1i(lutTextureLoc, 1);
 
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
