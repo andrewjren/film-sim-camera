@@ -1,97 +1,18 @@
-
-//#include <iostream>
-#include <memory>
-#include <thread>
-#include <gbm.h>
-#include <EGL/egl.h>
-//#include <GLES2/gl2.h>
-#include <GLES3/gl3.h>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <utility>
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image.h"
-#include "stb_image_write.h"
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <PiCamera.hpp>
-#include <FrameManager.hpp>
-#include <log.hpp>
-#include <Drm.hpp>
-#include <Touchscreen.hpp>
-#include <chrono>
 #include <ShaderManager.hpp>
+#include "stb_image.h"
+#include <gbm.h>
+#include <fcntl.h>
+#include <Drm.hpp>
 
-// EGL
-#include <string>
-#include <filesystem>
-#include <cstdlib>
-#include <fstream>
-#include <sstream>
-/*
-int device;
-uint32_t connectorId;
-drmModeModeInfo mode;
-drmModeCrtc *crtc;
-struct gbm_device *gbmDevice;
-struct gbm_surface *gbmSurface;
+int ShaderManager::GetHeight() {
+    return test_height;
+}
 
-static struct gbm_bo *previousBo = NULL;
-static uint32_t previousFb;
-*/
-// added to make render loop easier
-/*
-static int test_nrChannels;
-static unsigned int dstFBO, dstTex;
-static unsigned int lut_texture;
-static unsigned int test_texture;
-static unsigned int input_pbo[3];
-static unsigned int lut_pbo;
-static unsigned int output_pbo[3];
-static const unsigned int num_buffers = 3;
-static unsigned int y_texture, u_texture, v_texture;
-static unsigned int rgb_pbo;
-static unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
-GLuint vao,vbo;
-static GLuint program, vert, frag;
-static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
-static EGLDisplay display;
-static EGLSurface surface;
-static EGLContext context;
-int lut_width, lut_height, lut_depth, lut_nrChannels;
-std::string lut_dir = std::string(std::getenv("HOME")) + "/codac/lut/";
-std::vector<std::filesystem::path> lut_files;
-std::string viewfinder_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_vs.glsl";
-std::string viewfinder_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_fs.glsl";
-std::string stillcapture_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_vs.glsl";
-std::string stillcapture_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_fs.glsl";
-size_t image_size; 
-int read_index;
-int write_index;
-*/
+int ShaderManager::GetWidth() {
+    return test_width;
+}
 
-//forward declaration that will be removed
-//static void checkGlCompileErrors(GLuint);
-//static const char *eglGetErrorStr();
-// The following code was adopted from
-// https://github.com/matusnovak/rpi-opengl-without-x/blob/master/triangle.c
-// and is licensed under the Unlicense.
-/*static const EGLint configAttribs[] = {
-    EGL_RED_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_BLUE_SIZE, 8,
-    EGL_DEPTH_SIZE, 8,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-    EGL_NONE};*/
-
-/*static const EGLint contextAttribs[] = {
-    EGL_CONTEXT_CLIENT_VERSION, 2,
-    EGL_NONE};*/
-
-/*static void checkGlCompileErrors(GLuint shader)
+void ShaderManager::checkGlCompileErrors(GLuint shader)
 {
     GLint isCompiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
@@ -101,21 +22,9 @@ int write_index;
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
         LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
     }
-}*/
+}
 
-/*int desiredWidth = 1296;
-int desiredHeight = 972;
-int test_width = 1296;
-int test_height = 972;
-const int screen_width = 640;
-const int screen_height = 480;*/
-
-//glm::mat4 trans_mat = glm::mat4(1.0f);
-//glm::mat4 rot_mat = glm::mat4(1.0f);
-
-// OpenGL Helper Functions
-/*
-void load_lut(int index) {
+void ShaderManager::load_lut(int index) {
     unsigned char *lut_data = stbi_load(lut_files[index].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
     LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
     LOG << "Loading texture: " << lut_files[index].filename() << "\n";
@@ -154,10 +63,8 @@ void load_lut(int index) {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     stbi_image_free(lut_data);
 }
-*/
 
-/*
-void load_shader(GLuint &shader, const std::string &filename) {
+void ShaderManager::load_shader(GLuint &shader, const std::string &filename) {
     std::ifstream infile(filename);
     if (!infile.is_open()) {
         LOG_ERR << "Failed to open shader file " << filename << "\n";
@@ -172,18 +79,15 @@ void load_shader(GLuint &shader, const std::string &filename) {
     if (source.empty()) {
         LOG_ERR << "Shader file " << filename << " was empty\n";
     }
-    
+
     const char* shader_code = source.c_str();
     glShaderSource(shader, 1, &shader_code, NULL);
     glCompileShader(shader);
     checkGlCompileErrors(shader);
 }
-*/
 
-/*
-
-int Initialize_OpenGL() {
-    // OpenGL stuff 
+int ShaderManager::Initialize_OpenGL() {
+    /* OpenGL stuff */
     int major, minor;
     //GLuint program, vert, frag;
     GLint colorLoc, result;
@@ -255,7 +159,6 @@ int Initialize_OpenGL() {
 
     free(configs);
     eglMakeCurrent(display, surface, surface, context);
-
     // Set GL Viewport size, always needed!
     glViewport(0, 0, desiredWidth, desiredHeight);
 
@@ -278,29 +181,19 @@ int Initialize_OpenGL() {
 
     return 1;
 }
-*/
-/*
-void Init_Transformation_Matrix() {
+
+void ShaderManager::Init_Transformation_Matrix() {
     // Transformation Matrix
-	float scale = float(screen_width) / float(test_width);
-	trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
-	trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
-	trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
+    float scale = float(screen_width) / float(test_width);
+    trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
+    trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
+    trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
 
     rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-}*/
-/*
-// Setup full screen quad
-float quad[] = {
-  -1, -1, 0, 0,
-  1, -1, 1, 0,
-  1,  1, 1, 1,
-  -1,  1, 0, 1
-};
-*/
-/*
+}
+
 // Get the EGL error back as a string. Useful for debugging.
-static const char *eglGetErrorStr()
+const char *ShaderManager::eglGetErrorStr()
 {
     switch (eglGetError())
     {
@@ -352,10 +245,8 @@ static const char *eglGetErrorStr()
     }
     return "Unknown error!";
 }
-*/
 
-/*
-void BindTextures() {
+void ShaderManager::BindTextures() {
     // Bind textures before rendering
     glViewport(0,0,test_width,test_height);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -372,10 +263,8 @@ void BindTextures() {
 
     LOG << "after binding textures: " << glGetError() << std::endl;
 }
-*/
 
-/*
-void TestProgram() {
+void ShaderManager::TestProgram() {
     // run GL program?
     glGenVertexArrays(1,&vao);
     glBindVertexArray(vao);
@@ -393,9 +282,8 @@ void TestProgram() {
     LOG << "after running gL program: " << glGetError() << std::endl;
     LOG << "image_size: " << image_size << std::endl;
 }
-*/
-/*
-void InitCaptureProgram() {
+
+void ShaderManager::InitCaptureProgram() {
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
     yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
@@ -426,13 +314,13 @@ void InitCaptureProgram() {
 
     glUseProgram(yuv2rgb_program);
 
-   
+
     yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
     uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
     vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
     lutTextureLoc = glGetUniformLocation(yuv2rgb_program, "clut");
     unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
- 
+
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, y_texture);
     glUniform1i(yTextureLoc, 2);
@@ -464,10 +352,8 @@ if (!valid) {
     glUseProgram(yuv2rgb_program);
      LOG << "Using yuv program: " << glGetError() << std::endl;
 }
-*/
 
-/*
-void InitViewfinderProgram() {
+void ShaderManager::InitViewfinderProgram() {
     // Create shader program for Viewfinder
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
@@ -494,9 +380,9 @@ void InitViewfinderProgram() {
     LOG << "Set Image Size: " << test_width << ", " << test_height << std::endl;
 
     // setup texture for input images (from camera)
-    glGenTextures(1, &test_texture); 
+    glGenTextures(1, &test_texture);
     glBindTexture(GL_TEXTURE_2D, test_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -508,7 +394,6 @@ void InitViewfinderProgram() {
         glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
     }
-
     // setup pbo for output image (to screen)
     for (int i = 0; i < num_buffers; i++) {
         glGenBuffers(1, &output_pbo[i]);
@@ -520,21 +405,21 @@ void InitViewfinderProgram() {
     // setup texture for YUV input images (from camera)
     glGenTextures(1, &y_texture);
     glBindTexture(GL_TEXTURE_2D, y_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width, test_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width, test_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &u_texture);
     glBindTexture(GL_TEXTURE_2D, u_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &v_texture);
     glBindTexture(GL_TEXTURE_2D, v_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr); 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -560,14 +445,14 @@ void InitViewfinderProgram() {
     glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
 
-	unsigned int trans_loc = glGetUniformLocation(program, "transform");
-	glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
+    unsigned int trans_loc = glGetUniformLocation(program, "transform");
+    glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
 
     LOG << "after setting uniforms: " << glGetError() << std::endl;
 
     // create fbo bound to output 
     //unsigned int dstFBO, dstTex;
-    
+
     glGenFramebuffers(1, &dstFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
 
@@ -584,18 +469,18 @@ void InitViewfinderProgram() {
         // Attached image has width/height of 0
         LOG << "incomplete" << std::endl;
         break;
-		
-    	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+
+        case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
         // No images attached to FBO
-    	LOG << "missing attachemnt" << std::endl;
+        LOG << "missing attachemnt" << std::endl;
         break;
 
-    	case GL_FRAMEBUFFER_UNSUPPORTED:
+        case GL_FRAMEBUFFER_UNSUPPORTED:
         // Format combination not supported
-    	LOG << "unsupported" << std::endl;
+        LOG << "unsupported" << std::endl;
         break;
 
-    	default:
+        default:
         printf("Unknown framebuffer error: 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
         }
 
@@ -603,11 +488,10 @@ void InitViewfinderProgram() {
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
-*/
 
-/*
-void *ViewfinderRender(std::vector<uint8_t> &vec_frame) {
- 
+
+void *ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame) {
+
     // Provide buffer to write to
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
@@ -636,24 +520,23 @@ void *ViewfinderRender(std::vector<uint8_t> &vec_frame) {
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-	//std::vector<unsigned char> drm_preview(640*480*4);
-	// Read Framebuffer for DRM preview
+    //std::vector<unsigned char> drm_preview(640*480*4);
+    // Read Framebuffer for DRM preview
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
     glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
     return ptr;
 }
-*/
 
-/*
-void *StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride) {
+
+void *ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride) {
     std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + stride*test_height;
     std::vector<uint8_t>::const_iterator u_end = y_end + stride*test_height/4;
     std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
 
     std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
     std::vector<uint8_t> u_data(y_end, u_end);
-    std::vector<uint8_t> v_data(u_end, v_end); 
+    std::vector<uint8_t> v_data(u_end, v_end);
     std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride);
@@ -690,7 +573,7 @@ LOG_ERR << "Validation error:\n" << infoLog << std::endl;
 }
     glUseProgram(yuv2rgb_program);
     LOG << "Use program: " << glGetError() << std::endl;
-    
+
     glActiveTexture(GL_TEXTURE2);
     glUniform1i(yTextureLoc, 2);
 
@@ -710,218 +593,12 @@ LOG_ERR << "Validation error:\n" << infoLog << std::endl;
     void *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
     return ptr;
 }
-*/
 
-/*
- * Finally! We have a connector with a suitable CRTC. We know which mode we want
- * to use and we have a framebuffer of the correct size that we can write to.
- * There is nothing special left to do. We only have to program the CRTC to
- * connect each new framebuffer to each selected connector for each combination
- * that we saved in the global modeset_list.
- * This is done with a call to drmModeSetCrtc().
- *
- * So we are ready for our main() function. First we check whether the user
- * specified a DRM device on the command line, otherwise we use the default
- * /dev/dri/card0. Then we open the device via modeset_open(). modeset_prepare()
- * prepares all connectors and we can loop over "modeset_list" and call
- * drmModeSetCrtc() on every CRTC/connector combination.
- *
- * But printing empty black pages is boring so we have another helper function
- * modeset_draw() that draws some colors into the framebuffer for 5 seconds and
- * then returns. And then we have all the cleanup functions which correctly free
- * all devices again after we used them. All these functions are described below
- * the main() function.
- *
- * As a side note: drmModeSetCrtc() actually takes a list of connectors that we
- * want to control with this CRTC. We pass only one connector, though. As
- * explained earlier, if we used multiple connectors, then all connectors would
- * have the same controlling framebuffer so the output would be cloned. This is
- * most often not what you want so we avoid explaining this feature here.
- * Furthermore, all connectors will have to run with the same mode, which is
- * also often not guaranteed. So instead, we only use one connector per CRTC.
- *
- * Before calling drmModeSetCrtc() we also save the current CRTC configuration.
- * This is used in modeset_cleanup() to restore the CRTC to the same mode as was
- * before we changed it.
- * If we don't do this, the screen will stay blank after we exit until another
- * application performs modesetting itself.
- */
-
-int main(int argc, char **argv)
-{
-    int ret, fd;
-    const char *card;
-    struct modeset_dev *iter;
-    //EGLDisplay display;
-
-	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
-    std::unique_ptr<ShaderManager> shader_manager(new ShaderManager());
-
-    std::unique_ptr<PiCamera> picamera(new PiCamera());
-	picamera->Initialize();
-    //picamera.StartViewfinder();
-	picamera->SetFrameManager(frame_manager);
-
-    if (argc < 2) {
-        LOG << "not enough arguments\n";
-        return -1;
-    }
-    std::unique_ptr<Touchscreen> touchscreen(new Touchscreen(argv[1]));
-    //touchscreen->PollEvents();
-
-    /* check which DRM device to open */
-//    if (argc > 1)
-//        card = argv[1];
-//    else
-        card = "/dev/dri/card1";
-
-    fprintf(stderr, "using card '%s'\n", card);
-
-    /* open the DRM device */
-    ret = modeset_open(&fd, card);
-    if (ret)
-    {
-        if (ret) {
-            errno = -ret;
-            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-        } 
-        else {
-            fprintf(stderr, "exiting\n");
-        }
-        return ret;
-    }
-
-    /* prepare all connectors and CRTCs */
-    ret = modeset_prepare(fd);
-
-    if (ret) {
-        close(fd);
-        if (ret) {
-            errno = -ret;
-            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-        } 
-        else {
-            fprintf(stderr, "exiting\n");
-        }
-        return ret;
-    }
-
-    /* perform actual modesetting on each found connector+CRTC */
-    for (iter = modeset_list; iter; iter = iter->next) {
-        iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
-        ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
-                     &iter->conn, 1, &iter->mode);
-        if (ret)
-            fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
-                iter->conn, errno);
-    }
-
-    /* OpenGL stuff */ 
-    shader_manager->Initialize_OpenGL();
-    shader_manager->Init_Transformation_Matrix();
-	
-    shader_manager->InitCaptureProgram();
-    shader_manager->InitViewfinderProgram();
-    shader_manager->TestProgram();
-    shader_manager->BindTextures();
-
-	picamera->StartCamera();
-    //picamera.CreateRequests();
-    
-    // initialize variables
-    int num_frame = 0;
-    bool photo_requested = false;
-    int pixel_dims = shader_manager->GetHeight() * shader_manager->GetWidth();
-    std::vector<uint8_t> vec_frame;
-	vec_frame.resize(pixel_dims * 4);
-    std::vector<uint8_t> cap_frame;
-    cap_frame.resize(pixel_dims * 1.5); // YUV420 encoding 
-    //glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    std::vector<unsigned char> drm_preview(640*480*4);
-    std::vector<unsigned char> rgb_out(pixel_dims * 4);
-    void* ptr; 
-    int lut_index = 0;
-    while(num_frame < 1000) {
-
-            std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
-        touchscreen->PollEvents();
-        photo_requested = touchscreen->ProcessPhotoRequest();
-        shader_manager->IncReadWriteIndex(num_frame);
-//        write_index = num_frame % num_buffers;
-//        read_index = (num_frame + num_buffers - 2) % num_buffers; // previous frame
-        
-
-        if (photo_requested) {
-            LOG << "Frame: " << num_frame << std::endl;
-            LOG << "Starting Capture..." << std::endl;
-	        frame_manager->swap_capture(cap_frame); 
-            
-            ptr = shader_manager->StillCaptureRender(cap_frame, picamera->stride);
-			if (ptr) {
-				// Get data out of buffer
-				memcpy(rgb_out.data(), ptr, pixel_dims * 4);
-				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-			}
-			else {
-				LOG << "full frame pointer fail" << std::endl;
-			}
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-
-
-            stbi_write_png("debug-capture.png", shader_manager->GetWidth(), shader_manager->GetHeight(), 4, rgb_out.data(), shader_manager->GetWidth()*4);
-            lut_index = (lut_index + 1) % shader_manager->GetNumLuts(); 
-            shader_manager->load_lut(lut_index);
-            num_frame++;
-        }
-        
-        if (frame_manager->data_available()) {
-            LOG << "Frame: " << num_frame << std::endl;
-            // get data 
-            frame_manager->swap_buffers(vec_frame);
-            void* ptr = shader_manager->ViewfinderRender(vec_frame);
-
-			if (ptr) {
-				// write to DRM display
-				for (iter = modeset_list; iter; iter = iter->next) {
-					memcpy(&iter->map[0],ptr,640*480*4);
-				}
-				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-			}
-			else {
-				LOG << "drm pointer fail" << std::endl;
-			}
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-
-/* testing for GBM
-            eglSwapBuffers(display, surface);
-            struct gbm_bo * gbm_buffer_object = gbm_surface_lock_front_buffer(gbmSurface);
-            int fb_id = get_drm_fb_for_bo(gbm_buffer_object);
-            drmModePageFlip(fd, iter->crtc, fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
-
-            gbm_surface_release_buffer(gbmSurface, gbm_buffer_object);
-*/
-
-            std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
-            LOG << "Frame Time: " << elapsed_ms.count() << "\n";
-            num_frame++;
-			
-			
-        }
-
-    }
-
-    /* cleanup everything */
-    modeset_cleanup(fd);
-
-    ret = 0;
-
-    close(fd);
-    if (ret) {
-        errno = -ret;
-        fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-    } else {
-        fprintf(stderr, "exiting\n");
-    }
-    return ret;
+void ShaderManager::IncReadWriteIndex(int num_frame) {
+    write_index = num_frame % num_buffers;
+    read_index = (num_frame + num_buffers - 2) % num_buffers; // previous frame
 }
 
+int ShaderManager::GetNumLuts() {
+    return lut_files.size();
+}
