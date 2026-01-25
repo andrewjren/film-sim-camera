@@ -53,7 +53,7 @@ static const unsigned int num_buffers = 3;
 static unsigned int y_texture, u_texture, v_texture;
 static unsigned int rgb_pbo;
 static unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
-static GLuint vao,vbo;
+GLuint vao,vbo;
 static GLuint program, vert, frag;
 static GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
 static EGLDisplay display;
@@ -66,7 +66,7 @@ std::string viewfinder_vs_path = std::string(std::getenv("HOME")) + "/codac/shad
 std::string viewfinder_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_fs.glsl";
 std::string stillcapture_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_vs.glsl";
 std::string stillcapture_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_fs.glsl";
-
+size_t image_size; 
 //forward declaration that will be removed
 static void checkGlCompileErrors(GLuint);
 static const char *eglGetErrorStr();
@@ -347,115 +347,44 @@ static const char *eglGetErrorStr()
     return "Unknown error!";
 }
 
+void BindTextures() {
+    // Bind textures before rendering
+    glViewport(0,0,test_width,test_height);
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, test_texture);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, lut_texture);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, v_texture);
 
+    LOG << "after binding textures: " << glGetError() << std::endl;
+}
 
-/*
- * Finally! We have a connector with a suitable CRTC. We know which mode we want
- * to use and we have a framebuffer of the correct size that we can write to.
- * There is nothing special left to do. We only have to program the CRTC to
- * connect each new framebuffer to each selected connector for each combination
- * that we saved in the global modeset_list.
- * This is done with a call to drmModeSetCrtc().
- *
- * So we are ready for our main() function. First we check whether the user
- * specified a DRM device on the command line, otherwise we use the default
- * /dev/dri/card0. Then we open the device via modeset_open(). modeset_prepare()
- * prepares all connectors and we can loop over "modeset_list" and call
- * drmModeSetCrtc() on every CRTC/connector combination.
- *
- * But printing empty black pages is boring so we have another helper function
- * modeset_draw() that draws some colors into the framebuffer for 5 seconds and
- * then returns. And then we have all the cleanup functions which correctly free
- * all devices again after we used them. All these functions are described below
- * the main() function.
- *
- * As a side note: drmModeSetCrtc() actually takes a list of connectors that we
- * want to control with this CRTC. We pass only one connector, though. As
- * explained earlier, if we used multiple connectors, then all connectors would
- * have the same controlling framebuffer so the output would be cloned. This is
- * most often not what you want so we avoid explaining this feature here.
- * Furthermore, all connectors will have to run with the same mode, which is
- * also often not guaranteed. So instead, we only use one connector per CRTC.
- *
- * Before calling drmModeSetCrtc() we also save the current CRTC configuration.
- * This is used in modeset_cleanup() to restore the CRTC to the same mode as was
- * before we changed it.
- * If we don't do this, the screen will stay blank after we exit until another
- * application performs modesetting itself.
- */
+void TestProgram() {
+    // run GL program?
+    glGenVertexArrays(1,&vao);
+    glBindVertexArray(vao);
+    glGenBuffers(1,&vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STATIC_DRAW);
+    GLint posLoc = glGetAttribLocation(program,"aPos");
+    GLint uvLoc = glGetAttribLocation(program,"aTexCoord");
+    glVertexAttribPointer(posLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)0);
+    glEnableVertexAttribArray(posLoc);
+    glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
+    glEnableVertexAttribArray(uvLoc);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
 
-int main(int argc, char **argv)
-{
-    int ret, fd;
-    const char *card;
-    struct modeset_dev *iter;
-    //EGLDisplay display;
+    LOG << "after running gL program: " << glGetError() << std::endl;
+    LOG << "image_size: " << image_size << std::endl;
+}
 
-	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
-
-    std::unique_ptr<PiCamera> picamera(new PiCamera());
-	picamera->Initialize();
-    //picamera.StartViewfinder();
-	picamera->SetFrameManager(frame_manager);
-
-    if (argc < 2) {
-        LOG << "not enough arguments\n";
-        return -1;
-    }
-    std::unique_ptr<Touchscreen> touchscreen(new Touchscreen(argv[1]));
-    //touchscreen->PollEvents();
-
-    /* check which DRM device to open */
-//    if (argc > 1)
-//        card = argv[1];
-//    else
-        card = "/dev/dri/card1";
-
-    fprintf(stderr, "using card '%s'\n", card);
-
-    /* open the DRM device */
-    ret = modeset_open(&fd, card);
-    if (ret)
-    {
-        if (ret) {
-            errno = -ret;
-            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-        } 
-        else {
-            fprintf(stderr, "exiting\n");
-        }
-        return ret;
-    }
-
-    /* prepare all connectors and CRTCs */
-    ret = modeset_prepare(fd);
-
-    if (ret) {
-        close(fd);
-        if (ret) {
-            errno = -ret;
-            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
-        } 
-        else {
-            fprintf(stderr, "exiting\n");
-        }
-        return ret;
-    }
-
-    /* perform actual modesetting on each found connector+CRTC */
-    for (iter = modeset_list; iter; iter = iter->next) {
-        iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
-        ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
-                     &iter->conn, 1, &iter->mode);
-        if (ret)
-            fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
-                iter->conn, errno);
-    }
-
-    /* OpenGL stuff */ 
-    Initialize_OpenGL();
-    Init_Transformation_Matrix();
-	
+void InitCaptureProgram() {
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
     yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
@@ -523,9 +452,9 @@ if (!valid) {
 }
     glUseProgram(yuv2rgb_program);
      LOG << "Using yuv program: " << glGetError() << std::endl;
+}
 
-
-
+void InitViewfinderProgram() {
     // Create shader program for Viewfinder
     // Create a shader program
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
@@ -547,7 +476,7 @@ if (!valid) {
     //glDeleteShader(frag);
     //glDeleteShader(vert);
 
-    size_t image_size = test_width * test_height * 4; // RGBA
+    image_size = test_width * test_height * 4; // RGBA
 
     LOG << "Set Image Size: " << test_width << ", " << test_height << std::endl;
 
@@ -657,45 +586,122 @@ if (!valid) {
         printf("Unknown framebuffer error: 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
         }
 
-        return 0;
+        return;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    
+}
+ 
+/*
+ * Finally! We have a connector with a suitable CRTC. We know which mode we want
+ * to use and we have a framebuffer of the correct size that we can write to.
+ * There is nothing special left to do. We only have to program the CRTC to
+ * connect each new framebuffer to each selected connector for each combination
+ * that we saved in the global modeset_list.
+ * This is done with a call to drmModeSetCrtc().
+ *
+ * So we are ready for our main() function. First we check whether the user
+ * specified a DRM device on the command line, otherwise we use the default
+ * /dev/dri/card0. Then we open the device via modeset_open(). modeset_prepare()
+ * prepares all connectors and we can loop over "modeset_list" and call
+ * drmModeSetCrtc() on every CRTC/connector combination.
+ *
+ * But printing empty black pages is boring so we have another helper function
+ * modeset_draw() that draws some colors into the framebuffer for 5 seconds and
+ * then returns. And then we have all the cleanup functions which correctly free
+ * all devices again after we used them. All these functions are described below
+ * the main() function.
+ *
+ * As a side note: drmModeSetCrtc() actually takes a list of connectors that we
+ * want to control with this CRTC. We pass only one connector, though. As
+ * explained earlier, if we used multiple connectors, then all connectors would
+ * have the same controlling framebuffer so the output would be cloned. This is
+ * most often not what you want so we avoid explaining this feature here.
+ * Furthermore, all connectors will have to run with the same mode, which is
+ * also often not guaranteed. So instead, we only use one connector per CRTC.
+ *
+ * Before calling drmModeSetCrtc() we also save the current CRTC configuration.
+ * This is used in modeset_cleanup() to restore the CRTC to the same mode as was
+ * before we changed it.
+ * If we don't do this, the screen will stay blank after we exit until another
+ * application performs modesetting itself.
+ */
 
-    // run GL program?
-    GLuint vao,vbo;
-    glGenVertexArrays(1,&vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1,&vbo);
-    glBindBuffer(GL_ARRAY_BUFFER,vbo);
-    glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STATIC_DRAW);
-    GLint posLoc = glGetAttribLocation(program,"aPos");
-    GLint uvLoc = glGetAttribLocation(program,"aTexCoord");
-    glVertexAttribPointer(posLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)0);
-    glEnableVertexAttribArray(posLoc);
-    glVertexAttribPointer(uvLoc,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)(2*sizeof(float)));
-    glEnableVertexAttribArray(uvLoc);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
+int main(int argc, char **argv)
+{
+    int ret, fd;
+    const char *card;
+    struct modeset_dev *iter;
+    //EGLDisplay display;
 
-    LOG << "after running gL program: " << glGetError() << std::endl;
-    LOG << "image_size: " << image_size << std::endl;
+	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
 
-  
-    // Bind textures before rendering
-    glViewport(0,0,test_width,test_height);
-    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, test_texture);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_3D, lut_texture);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, y_texture);
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, u_texture);
-    glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, v_texture);
+    std::unique_ptr<PiCamera> picamera(new PiCamera());
+	picamera->Initialize();
+    //picamera.StartViewfinder();
+	picamera->SetFrameManager(frame_manager);
 
-   LOG << "after binding textures: " << glGetError() << std::endl;
+    if (argc < 2) {
+        LOG << "not enough arguments\n";
+        return -1;
+    }
+    std::unique_ptr<Touchscreen> touchscreen(new Touchscreen(argv[1]));
+    //touchscreen->PollEvents();
+
+    /* check which DRM device to open */
+//    if (argc > 1)
+//        card = argv[1];
+//    else
+        card = "/dev/dri/card1";
+
+    fprintf(stderr, "using card '%s'\n", card);
+
+    /* open the DRM device */
+    ret = modeset_open(&fd, card);
+    if (ret)
+    {
+        if (ret) {
+            errno = -ret;
+            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+        } 
+        else {
+            fprintf(stderr, "exiting\n");
+        }
+        return ret;
+    }
+
+    /* prepare all connectors and CRTCs */
+    ret = modeset_prepare(fd);
+
+    if (ret) {
+        close(fd);
+        if (ret) {
+            errno = -ret;
+            fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+        } 
+        else {
+            fprintf(stderr, "exiting\n");
+        }
+        return ret;
+    }
+
+    /* perform actual modesetting on each found connector+CRTC */
+    for (iter = modeset_list; iter; iter = iter->next) {
+        iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
+        ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
+                     &iter->conn, 1, &iter->mode);
+        if (ret)
+            fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
+                iter->conn, errno);
+    }
+
+    /* OpenGL stuff */ 
+    Initialize_OpenGL();
+    Init_Transformation_Matrix();
+	
+    InitCaptureProgram();
+    InitViewfinderProgram();
+    TestProgram();
+    BindTextures();
 
 	picamera->StartCamera();
     //picamera.CreateRequests();
