@@ -67,6 +67,9 @@ std::string viewfinder_fs_path = std::string(std::getenv("HOME")) + "/codac/shad
 std::string stillcapture_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_vs.glsl";
 std::string stillcapture_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_fs.glsl";
 size_t image_size; 
+int read_index;
+int write_index;
+
 //forward declaration that will be removed
 static void checkGlCompileErrors(GLuint);
 static const char *eglGetErrorStr();
@@ -192,12 +195,6 @@ int Initialize_OpenGL() {
         gbmClean();
         return EXIT_FAILURE;
     }
-    // We will use the screen resolution as the desired width and height for the viewport.
-    //int desiredWidth = 1296;
-    //int desiredHeight = 972;
-    //int test_width = 1296;
-    //int test_height = 972;
-
 
     // Make sure that we can use OpenGL in this EGL app.
     eglBindAPI(EGL_OPENGL_API);
@@ -590,7 +587,111 @@ void InitViewfinderProgram() {
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+void *ViewfinderRender(std::vector<uint8_t> &vec_frame) {
  
+    // Provide buffer to write to
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
+    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
+    //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+    if (ptr) {
+        memcpy(ptr, vec_frame.data(), vec_frame.size());
+        //stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
+        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    }
+    else {
+        LOG << "camera ptr error" << std::endl;
+    }
+
+    glUseProgram(program);
+
+    // Transfer to texture
+    glActiveTexture(GL_TEXTURE0);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+    // Render to Framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
+    glViewport(0,0,test_width,test_height);
+
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	//std::vector<unsigned char> drm_preview(640*480*4);
+	// Read Framebuffer for DRM preview
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
+    glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
+    return ptr;
+}
+
+void *StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride) {
+    std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + stride*test_height;
+    std::vector<uint8_t>::const_iterator u_end = y_end + stride*test_height/4;
+    std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
+
+    std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
+    std::vector<uint8_t> u_data(y_end, u_end);
+    std::vector<uint8_t> v_data(u_end, v_end); 
+    std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, stride);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glActiveTexture(GL_TEXTURE2);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, stride/2);
+
+    glActiveTexture(GL_TEXTURE3);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
+
+    glActiveTexture(GL_TEXTURE4);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+LOG << "Program ID: " << yuv2rgb_program << std::endl;
+if (yuv2rgb_program == 0) {
+LOG_ERR << "ERROR: Program ID is 0 (not created)" << std::endl;
+}
+
+GLboolean isProgram = glIsProgram(yuv2rgb_program);
+LOG << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
+glValidateProgram(yuv2rgb_program);
+
+GLint valid;
+glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
+if (!valid) {
+GLchar infoLog[1024];
+glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
+LOG_ERR << "Validation error:\n" << infoLog << std::endl;
+}
+    glUseProgram(yuv2rgb_program);
+    LOG << "Use program: " << glGetError() << std::endl;
+    
+    glActiveTexture(GL_TEXTURE2);
+    glUniform1i(yTextureLoc, 2);
+
+    glActiveTexture(GL_TEXTURE3);
+    glUniform1i(uTextureLoc, 3);
+
+    glActiveTexture(GL_TEXTURE4);
+    glUniform1i(vTextureLoc, 4);
+
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+    // Read Framebuffer
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]); // TODO: new pbo for captured frame data?
+    glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+    void *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
+    return ptr;
+}
+
+
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
  * to use and we have a framebuffer of the correct size that we can write to.
@@ -713,9 +814,7 @@ int main(int argc, char **argv)
 	vec_frame.resize(test_width * test_height * 4);
     std::vector<uint8_t> cap_frame;
     cap_frame.resize(test_width * test_height * 1.5); // YUV420 encoding 
-    int read_index;
-    int write_index;
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    //glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     std::vector<unsigned char> drm_preview(640*480*4);
     std::vector<unsigned char> rgb_out(test_width*test_height* 4);
     void* ptr; 
@@ -734,68 +833,7 @@ int main(int argc, char **argv)
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
-            std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + picamera->stride*test_height;
-            std::vector<uint8_t>::const_iterator u_end = y_end + picamera->stride*test_height/4;
-            std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
-
-            std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
-            std::vector<uint8_t> u_data(y_end, u_end);
-            std::vector<uint8_t> v_data(u_end, v_end); 
-            std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
-
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-            glActiveTexture(GL_TEXTURE2);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
-
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, picamera->stride/2);
-
-            glActiveTexture(GL_TEXTURE3);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
-
-            glActiveTexture(GL_TEXTURE4);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
-
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-
-LOG << "Program ID: " << yuv2rgb_program << std::endl;
-if (yuv2rgb_program == 0) {
-    LOG_ERR << "ERROR: Program ID is 0 (not created)" << std::endl;
-}
-
-GLboolean isProgram = glIsProgram(yuv2rgb_program);
-LOG << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
-glValidateProgram(yuv2rgb_program);
-
-GLint valid;
-glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
-if (!valid) {
-    GLchar infoLog[1024];
-    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
-}
-            glUseProgram(yuv2rgb_program);
-            LOG << "Use program: " << glGetError() << std::endl;
-            
-            glActiveTexture(GL_TEXTURE2);
-            glUniform1i(yTextureLoc, 2);
-
-            glActiveTexture(GL_TEXTURE3);
-            glUniform1i(uTextureLoc, 3);
-
-            glActiveTexture(GL_TEXTURE4);
-            glUniform1i(vTextureLoc, 4);
-
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-            // Read Framebuffer
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]); // TODO: new pbo for captured frame data?
-            glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-            //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
-
+            ptr = StillCaptureRender(cap_frame, picamera->stride);
 			if (ptr) {
 				// Get data out of buffer
 				memcpy(rgb_out.data(), ptr, test_width * test_height * 4);
@@ -817,40 +855,7 @@ if (!valid) {
             LOG << "Frame: " << num_frame << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
-
-            // Provide buffer to write to
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
-            void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
-            //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-            if (ptr) {
-                memcpy(ptr, vec_frame.data(), vec_frame.size());
-                //stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
-                glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-            }
-            else {
-                LOG << "camera ptr error" << std::endl;
-            }
-
-            glUseProgram(program);
-
-            // Transfer to texture
-            glActiveTexture(GL_TEXTURE0);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-            // Render to Framebuffer
-            glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-            glViewport(0,0,test_width,test_height);
-
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-			//std::vector<unsigned char> drm_preview(640*480*4);
-			// Read Framebuffer for DRM preview
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
-            glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-            ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
+            void* ptr = ViewfinderRender(vec_frame);
 
 			if (ptr) {
 				// write to DRM display
