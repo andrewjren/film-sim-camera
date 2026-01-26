@@ -1,22 +1,12 @@
-
-//#include <iostream>
 #include <memory>
-#include <thread>
 #include <gbm.h>
 #include <EGL/egl.h>
 //#include <GLES2/gl2.h>
 #include <GLES3/gl3.h>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <utility>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <PiCamera.hpp>
 #include <FrameManager.hpp>
 #include <log.hpp>
@@ -24,15 +14,6 @@
 #include <Touchscreen.hpp>
 #include <chrono>
 #include <ShaderManager.hpp>
-
-// EGL
-#include <string>
-#include <filesystem>
-#include <cstdlib>
-#include <fstream>
-#include <sstream>
-
-
 
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
