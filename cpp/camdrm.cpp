@@ -1,8 +1,8 @@
 #include <memory>
 #include <gbm.h>
-#include <EGL/egl.h>
+//#include <EGL/egl.h>
 //#include <GLES2/gl2.h>
-#include <GLES3/gl3.h>
+//#include <GLES3/gl3.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -55,7 +55,6 @@ int main(int argc, char **argv)
     int ret, fd;
     const char *card;
     struct modeset_dev *iter;
-    //EGLDisplay display;
 
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
     std::unique_ptr<ShaderManager> shader_manager(new ShaderManager());
@@ -120,8 +119,8 @@ int main(int argc, char **argv)
     }
 
     /* OpenGL stuff */ 
-    shader_manager->Initialize_OpenGL();
-    shader_manager->Init_Transformation_Matrix();
+    shader_manager->InitOpenGL();
+    shader_manager->InitTransformationMatrix();
 	
     shader_manager->InitCaptureProgram();
     shader_manager->InitViewfinderProgram();
@@ -146,10 +145,10 @@ int main(int argc, char **argv)
     int lut_index = 0;
     while(num_frame < 1000) {
 
-            std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
+        std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
-        shader_manager->IncReadWriteIndex(num_frame);
+        shader_manager->IncReadWriteIndex(num_frame); // TODO: move this into shadermanager 
         
 
         if (photo_requested) {
@@ -157,21 +156,14 @@ int main(int argc, char **argv)
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
-            ptr = shader_manager->StillCaptureRender(cap_frame, picamera->stride);
-			if (ptr) {
-				// Get data out of buffer
-				memcpy(rgb_out.data(), ptr, pixel_dims * 4);
-				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-			}
-			else {
-				LOG << "full frame pointer fail" << std::endl;
-			}
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-
+            shader_manager->StillCaptureRender(cap_frame, picamera->stride, [&](void *data, size_t size) {
+                // Get data out of buffer
+				memcpy(rgb_out.data(), data, size);
+            });
 
             stbi_write_png("debug-capture.png", shader_manager->GetWidth(), shader_manager->GetHeight(), 4, rgb_out.data(), shader_manager->GetWidth()*4);
             lut_index = (lut_index + 1) % shader_manager->GetNumLuts(); 
-            shader_manager->load_lut(lut_index);
+            shader_manager->LoadLUT(lut_index);
             num_frame++;
         }
         
@@ -179,19 +171,13 @@ int main(int argc, char **argv)
             LOG << "Frame: " << num_frame << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
-            void* ptr = shader_manager->ViewfinderRender(vec_frame);
-
-			if (ptr) {
-				// write to DRM display
+            shader_manager->ViewfinderRender(vec_frame, [&](void *data, size_t size) {
+                // write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
-					memcpy(&iter->map[0],ptr,640*480*4);
+					memcpy(&iter->map[0],data,size);
 				}
-				glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-			}
-			else {
-				LOG << "drm pointer fail" << std::endl;
-			}
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            });
+
 
 /* testing for GBM
             eglSwapBuffers(display, surface);

@@ -12,7 +12,7 @@ int ShaderManager::GetWidth() {
     return test_width;
 }
 
-void ShaderManager::checkGlCompileErrors(GLuint shader)
+void ShaderManager::CheckGlCompileErrors(GLuint shader)
 {
     GLint isCompiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
@@ -24,7 +24,27 @@ void ShaderManager::checkGlCompileErrors(GLuint shader)
     }
 }
 
-void ShaderManager::load_lut(int index) {
+void ShaderManager::ValidateProgram(GLuint program) {
+    LOG << "Program ID: " << program << std::endl;
+
+    if (program == 0) {
+        LOG_ERR << "ERROR: Program ID is 0 (not created)" << std::endl;
+    }
+
+    GLboolean isProgram = glIsProgram(program);
+    LOG << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
+    glValidateProgram(program);
+
+    GLint valid;
+    glGetProgramiv(program, GL_VALIDATE_STATUS, &valid);
+    if (!valid) {
+        GLchar infoLog[1024];
+        glGetProgramInfoLog(program, 1024, NULL, infoLog);
+        LOG_ERR << "Validation error:\n" << infoLog << std::endl; 
+    }
+}
+
+void ShaderManager::LoadLUT(int index) {
     unsigned char *lut_data = stbi_load(lut_files[index].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
     LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
     LOG << "Loading texture: " << lut_files[index].filename() << "\n";
@@ -64,7 +84,8 @@ void ShaderManager::load_lut(int index) {
     stbi_image_free(lut_data);
 }
 
-void ShaderManager::load_shader(GLuint &shader, const std::string &filename) {
+void ShaderManager::LoadShader(GLuint &shader, const std::string &filename) {
+    // TODO: create shader int in this function
     std::ifstream infile(filename);
     if (!infile.is_open()) {
         LOG_ERR << "Failed to open shader file " << filename << "\n";
@@ -83,10 +104,10 @@ void ShaderManager::load_shader(GLuint &shader, const std::string &filename) {
     const char* shader_code = source.c_str();
     glShaderSource(shader, 1, &shader_code, NULL);
     glCompileShader(shader);
-    checkGlCompileErrors(shader);
+    CheckGlCompileErrors(shader);
 }
 
-int ShaderManager::Initialize_OpenGL() {
+int ShaderManager::InitOpenGL() {
     /* OpenGL stuff */
     int major, minor;
     //GLuint program, vert, frag;
@@ -182,7 +203,7 @@ int ShaderManager::Initialize_OpenGL() {
     return 1;
 }
 
-void ShaderManager::Init_Transformation_Matrix() {
+void ShaderManager::InitTransformationMatrix() {
     // Transformation Matrix
     float scale = float(screen_width) / float(test_width);
     trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
@@ -287,21 +308,10 @@ void ShaderManager::InitCaptureProgram() {
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
     yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
-    load_shader(yuv2rgb_vert, stillcapture_vs_path.c_str());
+    LoadShader(yuv2rgb_vert, stillcapture_vs_path.c_str());
 
     yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
-    load_shader(yuv2rgb_frag, stillcapture_fs_path.c_str());
-
-
-
-    GLint isCompiled = 0;
-    glGetShaderiv(yuv2rgb_frag, GL_COMPILE_STATUS, &isCompiled);
-    if(isCompiled == GL_FALSE)
-    {
-        GLchar infoLog[512];
-        glGetShaderInfoLog(yuv2rgb_frag, 512, NULL, infoLog);
-        LOG_ERR << "ERROR: Shader Compilation Fail: " << infoLog << std::endl;
-    }
+    LoadShader(yuv2rgb_frag, stillcapture_fs_path.c_str());
 
     glAttachShader(yuv2rgb_program, yuv2rgb_frag);
     glAttachShader(yuv2rgb_program, yuv2rgb_vert);
@@ -310,7 +320,6 @@ void ShaderManager::InitCaptureProgram() {
 
     //glDeleteShader(yuv2rgb_frag);
     //glDeleteShader(yuv2rgb_vert);
-    LOG << "creating YUV to RGB program: " << glGetError() << std::endl;
 
     glUseProgram(yuv2rgb_program);
 
@@ -340,17 +349,10 @@ void ShaderManager::InitCaptureProgram() {
     LOG << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
     glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
 
-glValidateProgram(yuv2rgb_program);
-
-GLint valid;
-glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
-if (!valid) {
-    GLchar infoLog[1024];
-    glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-    LOG_ERR << "Validation error:\n" << infoLog << std::endl;
-}
+    ValidateProgram(yuv2rgb_program);
+    
     glUseProgram(yuv2rgb_program);
-     LOG << "Using yuv program: " << glGetError() << std::endl;
+    LOG << "Using yuv program: " << glGetError() << std::endl;
 }
 
 void ShaderManager::InitViewfinderProgram() {
@@ -360,10 +362,10 @@ void ShaderManager::InitViewfinderProgram() {
     // Read an OpenGL tutorial to properly implement shader creation
     program = glCreateProgram();
     vert = glCreateShader(GL_VERTEX_SHADER);
-    load_shader(vert, viewfinder_vs_path.c_str());
+    LoadShader(vert, viewfinder_vs_path.c_str());
 
     frag = glCreateShader(GL_FRAGMENT_SHADER);
-    load_shader(frag, viewfinder_fs_path.c_str());
+    LoadShader(frag, viewfinder_fs_path.c_str());
 
     glAttachShader(program, frag);
     glAttachShader(program, vert);
@@ -438,7 +440,7 @@ void ShaderManager::InitViewfinderProgram() {
         LOG << entry.path() << "\n";
         lut_files.push_back(entry.path());
     }
-    load_lut(0);
+    LoadLUT(0);
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
     // Set uniforms
@@ -449,9 +451,6 @@ void ShaderManager::InitViewfinderProgram() {
     glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
 
     LOG << "after setting uniforms: " << glGetError() << std::endl;
-
-    // create fbo bound to output 
-    //unsigned int dstFBO, dstTex;
 
     glGenFramebuffers(1, &dstFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
@@ -490,7 +489,7 @@ void ShaderManager::InitViewfinderProgram() {
 }
 
 
-void *ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame) {
+void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::function<void(void* data, size_t size) callback) {
 
     // Provide buffer to write to
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
@@ -520,16 +519,24 @@ void *ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame) {
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-    //std::vector<unsigned char> drm_preview(640*480*4);
     // Read Framebuffer for DRM preview
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
-    glReadPixels(0, 0, 480, 640, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 640 * 480 * 4, GL_MAP_READ_BIT);
-    return ptr;
+    glReadPixels(0, 0, screen_height, screen_width, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, screen_width * screen_height * 4, GL_MAP_READ_BIT);
+
+    // use callback function to move memory out, then unmap buffer
+    if (ptr && callback) {
+        callback(ptr, screen_width * screen_height * 4);
+        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    else {
+        // report error with callback
+    }
 }
 
 
-void *ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride) {
+void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride, std::function<void(void* data, size_t size) callback) {
     std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + stride*test_height;
     std::vector<uint8_t>::const_iterator u_end = y_end + stride*test_height/4;
     std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
@@ -554,26 +561,13 @@ void *ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int str
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    
+    //ValidateProgram(yuv2rgb_program);
 
-LOG << "Program ID: " << yuv2rgb_program << std::endl;
-if (yuv2rgb_program == 0) {
-LOG_ERR << "ERROR: Program ID is 0 (not created)" << std::endl;
-}
-
-GLboolean isProgram = glIsProgram(yuv2rgb_program);
-LOG << "Is valid program: " << (isProgram ? "yes" : "no") << std::endl;
-glValidateProgram(yuv2rgb_program);
-
-GLint valid;
-glGetProgramiv(yuv2rgb_program, GL_VALIDATE_STATUS, &valid);
-if (!valid) {
-GLchar infoLog[1024];
-glGetProgramInfoLog(yuv2rgb_program, 1024, NULL, infoLog);
-LOG_ERR << "Validation error:\n" << infoLog << std::endl;
-}
     glUseProgram(yuv2rgb_program);
     LOG << "Use program: " << glGetError() << std::endl;
 
+    // TODO: delete these after confirming setting them in init is enough
     glActiveTexture(GL_TEXTURE2);
     glUniform1i(yTextureLoc, 2);
 
@@ -591,7 +585,15 @@ LOG_ERR << "Validation error:\n" << infoLog << std::endl;
     glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
     void *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
-    return ptr;
+
+    if (ptr && callback) {
+        callback(ptr, test_width*test_height*4);
+        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    else {
+        // report error with callback
+    }
 }
 
 void ShaderManager::IncReadWriteIndex(int num_frame) {

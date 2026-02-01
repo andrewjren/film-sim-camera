@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <functional>
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <log.hpp>
@@ -44,7 +45,8 @@ private:
     size_t image_size; 
     int read_index;
     int write_index;
-    int desiredWidth = 1296;
+    int lut_index = 0;
+    int desiredWidth = 1296; // TODO: Remove instances of desired width and height
     int desiredHeight = 972;
     int test_width = 1296;
     int test_height = 972;
@@ -74,8 +76,9 @@ private:
       -1,  1, 0, 1
     };
 
-    static void checkGlCompileErrors(GLuint);
+    static void CheckGlCompileErrors(GLuint);
     static const char *eglGetErrorStr();
+    static void ValidateProgram(GLuint);
 
 public:
     ShaderManager() {
@@ -84,16 +87,16 @@ public:
 
     }
 
-    void load_lut(int);
-    void load_shader(GLuint &, const std::string &);
-    int Initialize_OpenGL();
-    void Init_Transformation_Matrix(); 
+    void LoadLUT(int);
+    void LoadShader(GLuint &, const std::string &);
+    int InitOpenGL();
+    void InitTransformationMatrix(); 
     void BindTextures();
     void TestProgram();
     void InitCaptureProgram();
     void InitViewfinderProgram();
-    void *ViewfinderRender(std::vector<uint8_t> &);
-    void *StillCaptureRender(std::vector<uint8_t> &, int ); 
+    void ViewfinderRender(std::vector<uint8_t> &,  std::function<void(void*, size_t));
+    void StillCaptureRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)); 
     void IncReadWriteIndex(int);
 
     int GetHeight();
