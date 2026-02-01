@@ -489,7 +489,7 @@ void ShaderManager::InitViewfinderProgram() {
 }
 
 
-void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::function<void(void* data, size_t size) callback) {
+void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::function<void(void* data, size_t size)> callback) {
 
     // Provide buffer to write to
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
@@ -536,7 +536,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
 }
 
 
-void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride, std::function<void(void* data, size_t size) callback) {
+void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride, std::function<void(void* data, size_t size)> callback) {
     std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + stride*test_height;
     std::vector<uint8_t>::const_iterator u_end = y_end + stride*test_height/4;
     std::vector<uint8_t>::const_iterator v_end = cap_frame.end();

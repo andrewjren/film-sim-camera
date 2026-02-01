@@ -95,8 +95,8 @@ public:
     void TestProgram();
     void InitCaptureProgram();
     void InitViewfinderProgram();
-    void ViewfinderRender(std::vector<uint8_t> &,  std::function<void(void*, size_t));
-    void StillCaptureRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)); 
+    void ViewfinderRender(std::vector<uint8_t> &,  std::function<void(void*, size_t)>);
+    void StillCaptureRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)>); 
     void IncReadWriteIndex(int);
 
     int GetHeight();
