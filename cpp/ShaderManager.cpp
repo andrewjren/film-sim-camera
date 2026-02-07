@@ -3,6 +3,7 @@
 #include <gbm.h>
 #include <fcntl.h>
 #include <Drm.hpp>
+#include <cmath>
 
 int ShaderManager::GetHeight() {
     return test_height;
@@ -55,33 +56,41 @@ void ShaderManager::LoadLUT(int index) {
     }
 
     size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
-    // setup lut texture
-    glGenTextures(1, &lut_texture); 
-    glBindTexture(GL_TEXTURE_3D, lut_texture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, 144, 144, 144, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_3D, 0);
+    // TODO: This assumes that the LUT size is the same every time. confirm if this is true
+    int lut_side = static_cast<int>(std::cbrt(lut_width * lut_height));
+    
+    // if first time, setup lut texture
+    if (!glIsTexture(lut_texture)) {
+        glGenTextures(1, &lut_texture); 
+        glBindTexture(GL_TEXTURE_3D, lut_texture);
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, lut_side, lut_side, lut_side, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_3D, 0);
+    }
 
-    // setup pbo for lut 
-    glGenBuffers(1, &lut_pbo);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    // if first time, setup pbo for lut 
+    if (!glIsBuffer(lut_pbo)) { 
+        glGenBuffers(1, &lut_pbo);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
+    }
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-    memcpy(ptr, lut_data, lut_size);
-    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    if (ptr) {
+        memcpy(ptr, lut_data, lut_size);
+        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
-    glBindTexture(GL_TEXTURE_3D, lut_texture);
-    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    glBindTexture(GL_TEXTURE_3D, 0);
+        glBindTexture(GL_TEXTURE_3D, lut_texture);
+        glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glBindTexture(GL_TEXTURE_3D, 0);
+        stbi_image_free(lut_data);
+    }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    stbi_image_free(lut_data);
 }
 
 void ShaderManager::LoadShader(GLuint &shader, const std::string &filename) {
