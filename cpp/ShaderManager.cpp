@@ -215,9 +215,9 @@ int ShaderManager::InitOpenGL() {
 void ShaderManager::InitTransformationMatrix() {
     // Transformation Matrix
     float scale = float(screen_width) / float(test_width);
-    trans_mat = glm::translate(trans_mat, glm::vec3(-0.6f, -0.4f, 0.0f));
+    float image_ratio = float(test_width) / float(test_height);
+    trans_mat = glm::mat4(1.0f);
     trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
-    trans_mat = glm::scale(trans_mat, glm::vec3(scale*4.0/3.0, scale*3.0/4.0, 1.0f));
 
     rot_mat = glm::rotate(rot_mat, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
 }
@@ -522,8 +522,9 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     // Render to Framebuffer
+    // Note that DRM screen treats width as 480, height as 640
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-    glViewport(0,0,test_width,test_height);
+    glViewport(0,0,screen_height,screen_width);
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -585,6 +586,8 @@ void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stri
 
     glActiveTexture(GL_TEXTURE4);
     glUniform1i(vTextureLoc, 4);
+
+    glViewport(0,0,test_width,test_height);
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
