@@ -177,7 +177,7 @@ int main(int argc, char **argv)
             else {
                 lut_index = (lut_index - 1 + num_luts) % num_luts;
             }
-            shader_manager->LoadLUT(lut_index);
+            shader_manager->SwitchLUT(lut_index);
 
         }
         

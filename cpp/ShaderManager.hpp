@@ -38,6 +38,7 @@ private:
     int lut_width, lut_height, lut_depth, lut_nrChannels;
     std::string lut_dir = std::string(std::getenv("HOME")) + "/codac/lut/";
     std::vector<std::filesystem::path> lut_files;
+    std::vector<unsigned char *> lut_data;
     std::string viewfinder_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_vs.glsl";
     std::string viewfinder_fs_path = std::string(std::getenv("HOME")) + "/codac/shader/viewfinder_fs.glsl";
     std::string stillcapture_vs_path = std::string(std::getenv("HOME")) + "/codac/shader/stillcapture_vs.glsl";
@@ -87,7 +88,8 @@ public:
 
     }
 
-    void LoadLUT(int);
+    void SwitchLUT(int);
+    void LoadLUTs();
     void LoadShader(GLuint &, const std::string &);
     int InitOpenGL();
     void InitTransformationMatrix(); 

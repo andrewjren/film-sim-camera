@@ -45,7 +45,56 @@ void ShaderManager::ValidateProgram(GLuint program) {
     }
 }
 
-void ShaderManager::LoadLUT(int index) {
+void ShaderManager::LoadLUTs() {
+    // load lut image 
+    for (const auto & entry : std::filesystem::directory_iterator(lut_dir)) {
+        LOG << entry.path() << "\n";
+        lut_files.push_back(entry.path());
+    }
+    int num_luts = lut_files.size();
+    
+    lut_data.resize(num_luts);
+
+    for (int idx = 0; idx < num_luts; idx++) {
+        lut_data[idx] = stbi_load(lut_files[idx].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
+        
+        LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data[idx]) << std::endl;
+        LOG << "Loading texture: " << lut_files[idx].filename() << "\n";
+        if (!lut_data[idx])
+        {
+            LOG << "Failed to load texture" << std::endl;
+            return;
+        }
+    }
+
+    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
+    // TODO: This assumes that the LUT size is the same every time. confirm if this is true
+    int lut_side = static_cast<int>(std::cbrt(lut_width * lut_height));
+
+    // if first time, setup lut texture
+    if (!glIsTexture(lut_texture)) {
+        glGenTextures(1, &lut_texture); 
+        glBindTexture(GL_TEXTURE_3D, lut_texture);
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, lut_side, lut_side, lut_side, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_3D, 0);
+    }
+
+    // if first time, setup pbo for lut 
+    if (!glIsBuffer(lut_pbo)) { 
+        glGenBuffers(1, &lut_pbo);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
+    }
+    SwitchLUT(0);
+}
+
+void ShaderManager::SwitchLUT(int index) {
+/*
     unsigned char *lut_data = stbi_load(lut_files[index].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
     LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
     LOG << "Loading texture: " << lut_files[index].filename() << "\n";
@@ -55,7 +104,6 @@ void ShaderManager::LoadLUT(int index) {
         return;
     }
 
-    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
     // TODO: This assumes that the LUT size is the same every time. confirm if this is true
     int lut_side = static_cast<int>(std::cbrt(lut_width * lut_height));
     
@@ -78,17 +126,18 @@ void ShaderManager::LoadLUT(int index) {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
     }
-
+*/
+    size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
     if (ptr) {
-        memcpy(ptr, lut_data, lut_size);
+        memcpy(ptr, lut_data[index], lut_size);
         glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
         glBindTexture(GL_TEXTURE_3D, lut_texture);
         glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 144, 144, 144, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
         glBindTexture(GL_TEXTURE_3D, 0);
-        stbi_image_free(lut_data);
+        //stbi_image_free(lut_data);
     }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
@@ -445,11 +494,14 @@ void ShaderManager::InitViewfinderProgram() {
 
 
     // load lut image 
+/*
     for (const auto & entry : std::filesystem::directory_iterator(lut_dir)) {
         LOG << entry.path() << "\n";
         lut_files.push_back(entry.path());
     }
     LoadLUT(0);
+*/
+    LoadLUTs();
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
     // Set uniforms
