@@ -1,8 +1,7 @@
 #include <memory>
+#include <thread>
+#include <chrono>
 #include <gbm.h>
-//#include <EGL/egl.h>
-//#include <GLES2/gl2.h>
-//#include <GLES3/gl3.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -12,7 +11,6 @@
 #include <log.hpp>
 #include <Drm.hpp>
 #include <Touchscreen.hpp>
-#include <chrono>
 #include <ShaderManager.hpp>
 
 /*
@@ -142,7 +140,6 @@ int main(int argc, char **argv)
     cap_frame.resize(pixel_dims * 1.5); // YUV420 encoding 
     //glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     std::vector<unsigned char> drm_preview(640*480*4);
-    std::vector<unsigned char> rgb_out(pixel_dims * 4);
     void* ptr; 
     int lut_index = 0;
     while(num_frame < 1000) {
@@ -160,13 +157,17 @@ int main(int argc, char **argv)
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
+            std::vector<unsigned char> rgb_out(pixel_dims * 4);
+
             shader_manager->StillCaptureRender(cap_frame, picamera->stride, [&](void *data, size_t size) {
                 // Get data out of buffer
 				memcpy(rgb_out.data(), data, size);
             });
 
-            stbi_write_png("debug-capture.png", shader_manager->GetWidth(), shader_manager->GetHeight(), 4, rgb_out.data(), shader_manager->GetWidth()*4);
-                        num_frame++;
+            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetWidth(), height = shader_manager->GetHeight()]() {
+            stbi_write_png("debug-capture.png", width, height, 4, rgb_out.data(), width*4);
+            }).detach();
+            num_frame++;
         }
         if (next_shader || prev_shader) {
             LOG << "Changing Shader" << std::endl;
