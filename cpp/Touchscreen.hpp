@@ -4,6 +4,12 @@
 #include <chrono>
 #include <libevdev/libevdev.h>
 #include <log.hpp>
+#include <cmath>
+
+struct ScreenPosition {
+    int pos_x;
+    int pos_y;
+};
 
 class Touchscreen {
 public:
@@ -66,16 +72,31 @@ public:
         return curr_photo_request;
     }
 
+    bool ProcessNextShader() {
+        bool curr_next_shader = next_shader;
+        next_shader = false;
+        return curr_next_shader;
+    }
+
+    bool ProcessPrevShader() {
+        bool curr_prev_shader = prev_shader;
+        prev_shader = false;
+        return curr_prev_shader;
+    }
+       
+
 
 private:
     int fd;
     int rc = 1;
     struct libevdev *dev = NULL;
-    int pos_x;
-    int pos_y;
+    ScreenPosition touchdown_pos;
+    ScreenPosition touchup_pos;
     std::chrono::time_point<std::chrono::system_clock> last_release;
     const std::chrono::milliseconds cooldown = std::chrono::milliseconds(100);
     bool photo_request = false;
+    bool next_shader = false;
+    bool prev_shader = false;
 
     enum TouchState {
         RELEASED,
@@ -85,12 +106,33 @@ private:
     };
     TouchState touch_state;
 
+    enum DragDirection {
+        NONE,
+        LEFT,
+        RIGHT,
+        UP,
+        DOWN
+    };
+    DragDirection drag_direction;
+
     void HandlePosX(int val) {
-        pos_x = val;
+        if (touch_state == TouchState::PRESSED) {
+            touchup_pos.pos_x = val;
+        }
+        else {
+            touchdown_pos.pos_x = val;
+            touchup_pos.pos_x = val;
+        }
     }
 
     void HandlePosY(int val) {
-        pos_y = val;
+        if (touch_state == TouchState::PRESSED) {
+            touchup_pos.pos_y = val;
+        }
+        else {
+            touchdown_pos.pos_y = val;
+            touchup_pos.pos_y = val;
+        }
     }
 
     void HandleTouchDown() {
@@ -101,22 +143,85 @@ private:
     }
 
     void HandleTouchUp() {
+        DetectDirection(touchdown_pos, touchup_pos);
         touch_state = TouchState::TRIGGERED;
     }
     
     void ProcessTouchState() {
-        if (touch_state == TouchState::TRIGGERED) {
+        if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::NONE) {
             RequestPhoto();
             touch_state = TouchState::RELEASED;
             last_release = std::chrono::system_clock::now();
         }
+        else if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::LEFT) {
+            NextShader();
+            touch_state = TouchState::RELEASED;
+            last_release = std::chrono::system_clock::now();
+        }
+        else if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::RIGHT) {
+            PrevShader();
+            touch_state = TouchState::RELEASED;
+            last_release = std::chrono::system_clock::now();
+        }
+        else if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::UP) {
+            touch_state = TouchState::RELEASED;
+            last_release = std::chrono::system_clock::now();
+        }
+        else if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::DOWN) {
+            touch_state = TouchState::RELEASED;
+            last_release = std::chrono::system_clock::now();
+        }
+
     }
 
     void RequestPhoto() {
         photo_request = true;
     }
 
-           
+    void NextShader() {
+        next_shader = true;
+    }
+
+    void PrevShader() {
+        prev_shader = true;
+    }
+
+    void DetectDirection(ScreenPosition initial_pos, ScreenPosition final_pos) {
+        int delta_x = final_pos.pos_x - initial_pos.pos_x;
+        int delta_y = final_pos.pos_y - initial_pos.pos_y;
+
+        const int mean_square_threshold = 400;
+        int mean_square = delta_x*delta_x + delta_y*delta_y;
+        LOG << "<" << initial_pos.pos_x << ", " << initial_pos.pos_y << ">   <" << final_pos.pos_x << ", " << final_pos.pos_y << ">\n";
+        bool is_horizontal = std::abs(delta_x) < std::abs(delta_y); // screen treats vertical as normal orientation
+
+        if (mean_square < mean_square_threshold) {
+            drag_direction = DragDirection::NONE;
+            LOG << "drag none\n";
+        }
+        else if (is_horizontal && delta_y < 0) {
+            drag_direction = DragDirection::LEFT;
+            LOG << "drag left\n";
+        }
+        else if (is_horizontal && delta_y > 0) {
+            drag_direction = DragDirection::RIGHT;
+            LOG << "drag right\n";
+        }
+        else if (!is_horizontal && delta_x > 0) {
+            drag_direction = DragDirection::UP;
+            LOG << "drag up\n";
+        }
+        else if (!is_horizontal && delta_x < 0) {
+            drag_direction = DragDirection::DOWN;
+            LOG << "drag down\n";
+        }
+        else {
+            LOG << "drag not detected properly\n";
+        }
+    }
+        
+        
+          
 };
 
 #endif // TOUCHSCREEN_HPP

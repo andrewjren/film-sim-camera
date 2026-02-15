@@ -133,6 +133,8 @@ int main(int argc, char **argv)
     // initialize variables
     int num_frame = 0;
     bool photo_requested = false;
+    bool prev_shader = false;
+    bool next_shader = false;
     int pixel_dims = shader_manager->GetHeight() * shader_manager->GetWidth();
     std::vector<uint8_t> vec_frame;
 	vec_frame.resize(pixel_dims * 4);
@@ -148,6 +150,8 @@ int main(int argc, char **argv)
         std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
+        prev_shader = touchscreen->ProcessPrevShader();
+        next_shader = touchscreen->ProcessNextShader();
         shader_manager->IncReadWriteIndex(num_frame); // TODO: move this into shadermanager 
         
 
@@ -162,9 +166,19 @@ int main(int argc, char **argv)
             });
 
             stbi_write_png("debug-capture.png", shader_manager->GetWidth(), shader_manager->GetHeight(), 4, rgb_out.data(), shader_manager->GetWidth()*4);
-            lut_index = (lut_index + 1) % shader_manager->GetNumLuts(); 
+                        num_frame++;
+        }
+        if (next_shader || prev_shader) {
+            LOG << "Changing Shader" << std::endl;
+            int num_luts = shader_manager->GetNumLuts();
+            if (next_shader) {
+                lut_index = (lut_index + 1) % num_luts;
+            }
+            else {
+                lut_index = (lut_index - 1 + num_luts) % num_luts;
+            }
             shader_manager->LoadLUT(lut_index);
-            num_frame++;
+
         }
         
         if (frame_manager->data_available()) {
