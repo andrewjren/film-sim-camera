@@ -41,6 +41,7 @@ private:
     unsigned int rgb_pbo;
     unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
     GLuint vao,vbo;
+    GLuint text_vao, text_vbo;
     GLuint program, vert, frag;
     GLuint yuv2rgb_program, yuv2rgb_vert, yuv2rgb_frag;
     EGLDisplay display;

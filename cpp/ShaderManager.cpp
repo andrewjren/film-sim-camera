@@ -573,7 +573,6 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-    RenderText("test!", 25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
 
     // Render to Framebuffer
     // Note that DRM screen treats width as 480, height as 640
@@ -582,6 +581,9 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+    RenderText("test!", 25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    glUseProgram(program);
 
     // Read Framebuffer for DRM preview
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
@@ -733,13 +735,26 @@ void ShaderManager::InitFreetype() {
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
+    // Use dedicated VAO and VBO for text
+    // configure VAO/VBO for texture quads
+    // -----------------------------------
+    glGenVertexArrays(1, &text_vao);
+    glGenBuffers(1, &text_vbo);
+    glBindVertexArray(text_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, text_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
     // Create program for text
     text_program = glCreateProgram();
     text_vert = glCreateShader(GL_VERTEX_SHADER);
-    LoadShader(text_vert, stillcapture_vs_path.c_str());
+    LoadShader(text_vert, text_vs_path.c_str());
 
     text_frag = glCreateShader(GL_FRAGMENT_SHADER);
-    LoadShader(text_frag, stillcapture_fs_path.c_str());
+    LoadShader(text_frag, text_fs_path.c_str());
 
     glAttachShader(text_program, text_frag);
     glAttachShader(text_program, text_vert);
@@ -756,11 +771,15 @@ void ShaderManager::InitFreetype() {
 // -------------------
 void ShaderManager::RenderText(std::string text, float x, float y, float scale, glm::vec3 color)
 {
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // activate corresponding render state	
     glUseProgram(text_program);
     glUniform3f(glGetUniformLocation(text_program, "textColor"), color.x, color.y, color.z);
     glActiveTexture(GL_TEXTURE0);
-    glBindVertexArray(vao);
+    glBindVertexArray(text_vao);
 
     // iterate through all characters
     std::string::const_iterator c;
@@ -786,7 +805,7 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
         // render glyph texture over quad
         glBindTexture(GL_TEXTURE_2D, ch.TextureID);
         // update content of VBO memory
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, text_vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -797,4 +816,7 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
 }
