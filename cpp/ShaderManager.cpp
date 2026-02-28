@@ -582,7 +582,11 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-    RenderText("test!", 25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText("test!", 0.0f, 0.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText("++", 25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText("+-", 25.0f, -25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText("-+", -25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText("--", -25.0f, -25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
     glUseProgram(program);
 
     // Read Framebuffer for DRM preview
@@ -690,6 +694,11 @@ void ShaderManager::InitFreetype() {
 
     FT_Set_Pixel_Sizes(face, 0, 24);
 
+
+    //glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // Load first 128 ASCII Characters
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // disable byte-alignment restriction
       
@@ -704,6 +713,7 @@ void ShaderManager::InitFreetype() {
         // generate texture
         unsigned int texture;
         glGenTextures(1, &texture);
+        glActiveTexture(GL_TEXTURE5);
         glBindTexture(GL_TEXTURE_2D, texture);
         glTexImage2D(
             GL_TEXTURE_2D,
@@ -760,7 +770,8 @@ void ShaderManager::InitFreetype() {
     glAttachShader(text_program, text_vert);
     glLinkProgram(text_program);
 
-    glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(screen_width), 0.0f, static_cast<float>(screen_height));
+    glm::mat4 projection = glm::ortho(0.0f,-static_cast<float>(screen_height), 0.0f, static_cast<float>(screen_width));
+    projection = glm::rotate(projection, glm::radians(90.0f), glm::vec3(0.0, 0.0, 1.0));
  
     glUseProgram(text_program);
     glUniformMatrix4fv(glGetUniformLocation(text_program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -771,14 +782,14 @@ void ShaderManager::InitFreetype() {
 // -------------------
 void ShaderManager::RenderText(std::string text, float x, float y, float scale, glm::vec3 color)
 {
-    glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // activate corresponding render state	
     glUseProgram(text_program);
     glUniform3f(glGetUniformLocation(text_program, "textColor"), color.x, color.y, color.z);
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE5);
     glBindVertexArray(text_vao);
 
     // iterate through all characters
@@ -803,7 +814,9 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
             { xpos + w, ypos + h,   1.0f, 0.0f }           
         };
         // render glyph texture over quad
+        glActiveTexture(GL_TEXTURE5);
         glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+        glUniform1i(glGetUniformLocation(text_program, "text"), 5);
         // update content of VBO memory
         glBindBuffer(GL_ARRAY_BUFFER, text_vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
@@ -817,6 +830,6 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
     
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
+    //glDisable(GL_CULL_FACE);
+    //glDisable(GL_BLEND);
 }
