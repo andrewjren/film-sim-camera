@@ -47,20 +47,16 @@ void ShaderManager::ValidateProgram(GLuint program) {
 
 void ShaderManager::LoadLUTs() {
     // load lut image 
+    std::vector<std::filesystem::path> lut_files;
     for (const auto & entry : std::filesystem::directory_iterator(lut_dir)) {
-        LOG << entry.path() << "\n";
-        lut_files.push_back(entry.path());
-    }
-    int num_luts = lut_files.size();
-    
-    lut_data.resize(num_luts);
+        LUT new_lut;
+        new_lut.Name = entry.path().stem();
+        new_lut.Data = stbi_load(entry.path().c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
 
-    for (int idx = 0; idx < num_luts; idx++) {
-        lut_data[idx] = stbi_load(lut_files[idx].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
-        
-        LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data[idx]) << std::endl;
-        LOG << "Loading texture: " << lut_files[idx].filename() << "\n";
-        if (!lut_data[idx])
+        lut_data.push_back(new_lut);
+
+        LOG << "Loading texture: " << new_lut.Name << "\n";
+        if (!new_lut.Data)
         {
             LOG << "Failed to load texture" << std::endl;
             return;
@@ -94,44 +90,13 @@ void ShaderManager::LoadLUTs() {
 }
 
 void ShaderManager::SwitchLUT(int index) {
-/*
-    unsigned char *lut_data = stbi_load(lut_files[index].c_str(), &lut_width, &lut_height, &lut_nrChannels, 0); 
-    LOG << "CLUT dimensions: " << lut_width << " x " << lut_height << " x " << lut_depth << " x " << lut_nrChannels << "total size: " << sizeof(*lut_data) << std::endl;
-    LOG << "Loading texture: " << lut_files[index].filename() << "\n";
-    if (!lut_data)
-    {
-        LOG << "Failed to load texture" << std::endl;
-        return;
-    }
 
-    // TODO: This assumes that the LUT size is the same every time. confirm if this is true
-    int lut_side = static_cast<int>(std::cbrt(lut_width * lut_height));
-    
-    // if first time, setup lut texture
-    if (!glIsTexture(lut_texture)) {
-        glGenTextures(1, &lut_texture); 
-        glBindTexture(GL_TEXTURE_3D, lut_texture);
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, lut_side, lut_side, lut_side, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_3D, 0);
-    }
-
-    // if first time, setup pbo for lut 
-    if (!glIsBuffer(lut_pbo)) { 
-        glGenBuffers(1, &lut_pbo);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, lut_size, nullptr, GL_DYNAMIC_DRAW);
-    }
-*/
+    lut_idx = index;
     size_t lut_size = lut_width * lut_height * 3; // 3D RGBA
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lut_pbo);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, lut_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
     if (ptr) {
-        memcpy(ptr, lut_data[index], lut_size);
+        memcpy(ptr, lut_data[index].Data, lut_size);
         glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
         glBindTexture(GL_TEXTURE_3D, lut_texture);
@@ -582,11 +547,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-    RenderText("test!", 0.0f, 0.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
-    RenderText("++", 25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
-    RenderText("+-", 25.0f, -25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
-    RenderText("-+", -25.0f, 25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
-    RenderText("--", -25.0f, -25.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    RenderText(lut_data[lut_idx].Name, 10.0f, 10.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
     glUseProgram(program);
 
     // Read Framebuffer for DRM preview
@@ -674,7 +635,7 @@ void ShaderManager::IncReadWriteIndex(int num_frame) {
 }
 
 int ShaderManager::GetNumLuts() {
-    return lut_files.size();
+    return lut_data.size();
 }
 
 void ShaderManager::InitFreetype() {
@@ -695,7 +656,6 @@ void ShaderManager::InitFreetype() {
     FT_Set_Pixel_Sizes(face, 0, 24);
 
 
-    //glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -782,7 +742,6 @@ void ShaderManager::InitFreetype() {
 // -------------------
 void ShaderManager::RenderText(std::string text, float x, float y, float scale, glm::vec3 color)
 {
-    //glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -830,6 +789,5 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
     
-    //glDisable(GL_CULL_FACE);
     //glDisable(GL_BLEND);
 }
