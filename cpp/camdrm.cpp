@@ -124,6 +124,7 @@ int main(int argc, char **argv)
     shader_manager->InitViewfinderProgram();
     shader_manager->TestProgram();
     shader_manager->BindTextures();
+    shader_manager->InitFreetype();
 
 	picamera->StartCamera();
     //picamera.CreateRequests();

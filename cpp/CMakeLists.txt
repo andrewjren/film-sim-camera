@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(drmtest LANGUAGES C CXX)
 
 find_package(PkgConfig REQUIRED)
+find_package(Freetype REQUIRED)
 
 pkg_check_modules(DRM REQUIRED libdrm)
 pkg_check_modules(LIBCAMERA REQUIRED libcamera)
@@ -35,6 +36,7 @@ target_include_directories(camdrm PRIVATE
   ${GBM_INCLUDE_DIRS}
   ${LIBEVDEV_INCLUDE_DIRS}
   ${CMAKE_CURRENT_SOURCE_DIR}
+  ${FREETYPE_INCLUDE_DIRS}
   )
 
 target_link_libraries(camdrm PRIVATE 
@@ -47,5 +49,6 @@ target_link_libraries(camdrm PRIVATE
   ${LIBEVDEV_LIBRARIES}
   #glm::glm-header-only
   libpicamera
+  ${FREETYPE_LIBRARIES}
   )
 
