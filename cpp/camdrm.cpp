@@ -184,9 +184,9 @@ int main(int argc, char **argv)
         }
         
         if (frame_manager->data_available()) {
-            LOG << "Frame: " << num_frame << std::endl;
             // get data 
             frame_manager->swap_buffers(vec_frame);
+            std::chrono::duration<float> swap_ms = std::chrono::system_clock::now() - start_time;
             shader_manager->ViewfinderRender(vec_frame, [&](void *data, size_t size) {
                 // write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 */
 
             std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
-            LOG << "Frame Time: " << elapsed_ms.count() << "\n";
+            LOG << "Frame: " << num_frame << " | swap time: " << swap_ms.count() << " | render time: " << elapsed_ms.count() - swap_ms.count() << "\n";
             num_frame++;
 			
 			

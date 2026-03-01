@@ -107,12 +107,13 @@ void ShaderManager::SwitchLUT(int index) {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
 
-void ShaderManager::LoadShader(GLuint &shader, const std::string &filename) {
-    // TODO: create shader int in this function
+GLuint ShaderManager::LoadShader(GLenum shader_type, const std::string &filename) {
+
+    GLuint shader = glCreateShader(shader_type);
     std::ifstream infile(filename);
     if (!infile.is_open()) {
         LOG_ERR << "Failed to open shader file " << filename << "\n";
-        return;
+        return -1;
     }
 
     std::stringstream buffer;
@@ -122,12 +123,15 @@ void ShaderManager::LoadShader(GLuint &shader, const std::string &filename) {
 
     if (source.empty()) {
         LOG_ERR << "Shader file " << filename << " was empty\n";
+        return -1;
     }
 
     const char* shader_code = source.c_str();
     glShaderSource(shader, 1, &shader_code, NULL);
     glCompileShader(shader);
     CheckGlCompileErrors(shader);
+
+    return shader;
 }
 
 int ShaderManager::InitOpenGL() {
@@ -330,11 +334,9 @@ void ShaderManager::TestProgram() {
 void ShaderManager::InitCaptureProgram() {
     // Create shader program for YUV to RGB conversion
     yuv2rgb_program = glCreateProgram();
-    yuv2rgb_vert = glCreateShader(GL_VERTEX_SHADER);
-    LoadShader(yuv2rgb_vert, stillcapture_vs_path.c_str());
+    yuv2rgb_vert = LoadShader(GL_VERTEX_SHADER, stillcapture_vs_path.c_str());
 
-    yuv2rgb_frag = glCreateShader(GL_FRAGMENT_SHADER);
-    LoadShader(yuv2rgb_frag, stillcapture_fs_path.c_str());
+    yuv2rgb_frag = LoadShader(GL_FRAGMENT_SHADER, stillcapture_fs_path.c_str());
 
     glAttachShader(yuv2rgb_program, yuv2rgb_frag);
     glAttachShader(yuv2rgb_program, yuv2rgb_vert);
@@ -384,11 +386,9 @@ void ShaderManager::InitViewfinderProgram() {
     // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
     // Read an OpenGL tutorial to properly implement shader creation
     program = glCreateProgram();
-    vert = glCreateShader(GL_VERTEX_SHADER);
-    LoadShader(vert, viewfinder_vs_path.c_str());
+    vert = LoadShader(GL_VERTEX_SHADER, viewfinder_vs_path.c_str());
 
-    frag = glCreateShader(GL_FRAGMENT_SHADER);
-    LoadShader(frag, viewfinder_fs_path.c_str());
+    frag = LoadShader(GL_FRAGMENT_SHADER, viewfinder_fs_path.c_str());
 
     glAttachShader(program, frag);
     glAttachShader(program, vert);
@@ -459,13 +459,6 @@ void ShaderManager::InitViewfinderProgram() {
 
 
     // load lut image 
-/*
-    for (const auto & entry : std::filesystem::directory_iterator(lut_dir)) {
-        LOG << entry.path() << "\n";
-        lut_files.push_back(entry.path());
-    }
-    LoadLUT(0);
-*/
     LoadLUTs();
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
@@ -520,10 +513,9 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
     // Provide buffer to write to
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
-    //GLubyte* ptr = (GLubyte*) glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+
     if (ptr) {
         memcpy(ptr, vec_frame.data(), vec_frame.size());
-        //stbi_write_png("debug-camera.png", test_width, test_height, 4, vec_frame.data(), test_width*4); // just make sure camera is actually r
         glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
     }
     else {
@@ -720,11 +712,9 @@ void ShaderManager::InitFreetype() {
 
     // Create program for text
     text_program = glCreateProgram();
-    text_vert = glCreateShader(GL_VERTEX_SHADER);
-    LoadShader(text_vert, text_vs_path.c_str());
+    text_vert = LoadShader(GL_VERTEX_SHADER, text_vs_path.c_str());
 
-    text_frag = glCreateShader(GL_FRAGMENT_SHADER);
-    LoadShader(text_frag, text_fs_path.c_str());
+    text_frag = LoadShader(GL_FRAGMENT_SHADER, text_fs_path.c_str());
 
     glAttachShader(text_program, text_frag);
     glAttachShader(text_program, text_vert);

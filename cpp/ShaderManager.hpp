@@ -115,7 +115,7 @@ public:
 
     void SwitchLUT(int);
     void LoadLUTs();
-    void LoadShader(GLuint &, const std::string &);
+    GLuint LoadShader(GLenum, const std::string &);
     int InitOpenGL();
     void InitTransformationMatrix(); 
     void BindTextures();
