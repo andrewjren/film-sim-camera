@@ -27,9 +27,11 @@ class PiCamera {
     DmaHeap dma_heap_;
     
     static void requestComplete(libcamera::Request*);
+    int viewfinder_width, viewfinder_height;
+    int stillcapture_width, stillcapture_height; 
 
     public:
-    PiCamera() {}
+    PiCamera(int, int, int, int);
     CaptureMode capture_mode; 
     static std::shared_ptr<FrameManager> frame_manager;
     std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
@@ -42,8 +44,8 @@ class PiCamera {
     void ConfigureViewfinder();
     void ConfigureStillCapture();
     void StartCamera();
-    void StartViewfinder();
-    void StartStillCapture();
+    //void StartViewfinder();
+    //void StartStillCapture();
     void StopCamera();
     void SetFrameManager(std::shared_ptr<FrameManager>);
     void Cleanup();

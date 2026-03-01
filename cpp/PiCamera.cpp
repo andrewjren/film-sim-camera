@@ -10,6 +10,13 @@ std::shared_ptr<libcamera::Camera> PiCamera::camera;
 std::unique_ptr<libcamera::CameraConfiguration> PiCamera::config;
 std::shared_ptr<FrameManager> PiCamera::frame_manager;
 
+PiCamera::PiCamera(int vf_width, int vf_height, int sc_width, int sc_height) {
+    viewfinder_width = vf_width;
+    viewfinder_height = vf_height;
+    stillcapture_width = sc_width;
+    stillcapture_height = sc_height;
+}
+
 void PiCamera::Initialize() {
     capture_mode = eViewfinder;
     camera_manager = std::make_unique<libcamera::CameraManager>();
@@ -38,7 +45,7 @@ void PiCamera::Initialize() {
 
     camera->requestCompleted.connect(requestComplete);
 }
-
+/*
 void PiCamera::StartViewfinder() {
     allocator = new libcamera::FrameBufferAllocator(camera);
 
@@ -58,7 +65,7 @@ void PiCamera::StartStillCapture() {
 
     camera->requestCompleted.connect(requestComplete);
 }
-
+*/
 void PiCamera::AllocateBuffers() {
 
     for (libcamera::StreamConfiguration &cfg : *config) {
@@ -216,13 +223,13 @@ void PiCamera::Configure() {
     config = camera->generateConfiguration( {libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
     LOG << "Default viewfinder configuration is: " << config->at(0).toString() << std::endl;
     viewfinder_config = std::make_shared<libcamera::StreamConfiguration>(config->at(0));
-    config->at(0).size.width = 1296;
-    config->at(0).size.height = 972;
+    config->at(0).size.width = viewfinder_width;
+    config->at(0).size.height = viewfinder_height;
 
     LOG << "Default still capture configuration is: " << config->at(1).toString() << std::endl;
     stillcapture_config = std::make_shared<libcamera::StreamConfiguration>(config->at(1));
-    config->at(1).size.width = 1296;
-    config->at(1).size.height = 972;
+    config->at(1).size.width = stillcapture_width;
+    config->at(1).size.height = stillcapture_height;
     
     config->validate();
     LOG << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;

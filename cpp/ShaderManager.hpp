@@ -66,14 +66,15 @@ private:
 
     GLuint text_program, text_vert, text_frag;
 
-    size_t image_size; 
     int read_index;
     int write_index;
     int lut_index = 0;
-    int desiredWidth = 1296; // TODO: Remove instances of desired width and height
-    int desiredHeight = 972;
-    int test_width = 1296;
-    int test_height = 972;
+    int desiredWidth = 2592; // TODO: Remove instances of desired width and height
+    int desiredHeight = 1944;
+    int test_width = 2592;
+    int test_height = 1944;
+    int viewfinder_width = 640;
+    int viewfinder_height = 480;
     const int screen_width = 640;
     const int screen_height = 480;
 
@@ -130,8 +131,10 @@ public:
     void InitFreetype();
     void RenderText(std::string, float, float, float, glm::vec3);
 
-    int GetHeight();
-    int GetWidth();
+    int GetStillCaptureHeight();
+    int GetStillCaptureWidth();
+    int GetViewfinderHeight();
+    int GetViewfinderWidth();
     int GetNumLuts();
 }; // ShaderManager 
 

@@ -5,12 +5,20 @@
 #include <Drm.hpp>
 #include <cmath>
 
-int ShaderManager::GetHeight() {
+int ShaderManager::GetStillCaptureHeight() {
     return test_height;
 }
 
-int ShaderManager::GetWidth() {
+int ShaderManager::GetStillCaptureWidth() {
     return test_width;
+}
+
+int ShaderManager::GetViewfinderHeight() {
+    return viewfinder_height;
+}
+
+int ShaderManager::GetViewfinderWidth() {
+    return viewfinder_width;
 }
 
 void ShaderManager::CheckGlCompileErrors(GLuint shader)
@@ -208,7 +216,7 @@ int ShaderManager::InitOpenGL() {
     free(configs);
     eglMakeCurrent(display, surface, surface, context);
     // Set GL Viewport size, always needed!
-    glViewport(0, 0, desiredWidth, desiredHeight);
+    glViewport(0, 0, test_width, test_height);
 
     // Get GL Viewport size and test if it is correct.
     GLint viewport[4];
@@ -217,7 +225,7 @@ int ShaderManager::InitOpenGL() {
     // viewport[2] and viewport[3] are viewport width and height respectively
     printf("GL Viewport size: %dx%d\n", viewport[2], viewport[3]);
 
-    if (viewport[2] != desiredWidth || viewport[3] != desiredHeight)
+    if (viewport[2] != test_width || viewport[3] != test_height)
     {
         fprintf(stderr, "Error! The glViewport returned incorrect values! Something is wrong!\n");
         eglDestroyContext(display, context);
@@ -328,7 +336,6 @@ void ShaderManager::TestProgram() {
     glBindBuffer(GL_ARRAY_BUFFER,0);
 
     LOG << "after running gL program: " << glGetError() << std::endl;
-    LOG << "image_size: " << image_size << std::endl;
 }
 
 void ShaderManager::InitCaptureProgram() {
@@ -400,14 +407,13 @@ void ShaderManager::InitViewfinderProgram() {
     //glDeleteShader(frag);
     //glDeleteShader(vert);
 
-    image_size = test_width * test_height * 4; // RGBA
 
-    LOG << "Set Image Size: " << test_width << ", " << test_height << std::endl;
+    LOG << "Set VF Image Size: " << viewfinder_width << ", " << viewfinder_height << std::endl;
 
     // setup texture for input images (from camera)
     glGenTextures(1, &test_texture);
     glBindTexture(GL_TEXTURE_2D, test_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, test_width, test_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, viewfinder_width, viewfinder_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -416,14 +422,14 @@ void ShaderManager::InitViewfinderProgram() {
     for (int i = 0; i < num_buffers; i++) {
         glGenBuffers(1, &input_pbo[i]);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[i]);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, image_size, nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, viewfinder_width * viewfinder_height * 4, nullptr, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
     }
     // setup pbo for output image (to screen)
     for (int i = 0; i < num_buffers; i++) {
         glGenBuffers(1, &output_pbo[i]);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[i]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+        glBufferData(GL_PIXEL_PACK_BUFFER, viewfinder_width * viewfinder_height * 4, nullptr, GL_DYNAMIC_READ);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
     }
 
@@ -454,7 +460,7 @@ void ShaderManager::InitViewfinderProgram() {
     // setup pbo for output image (to file)
     glGenBuffers(1, &rgb_pbo);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
-    glBufferData(GL_PIXEL_PACK_BUFFER, image_size, nullptr, GL_DYNAMIC_READ);
+    glBufferData(GL_PIXEL_PACK_BUFFER, test_width * test_height * 4, nullptr, GL_DYNAMIC_READ);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
 
 

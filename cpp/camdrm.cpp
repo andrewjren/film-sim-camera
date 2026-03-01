@@ -57,7 +57,7 @@ int main(int argc, char **argv)
 	std::shared_ptr<FrameManager> frame_manager = std::make_shared<FrameManager>();
     std::unique_ptr<ShaderManager> shader_manager(new ShaderManager());
 
-    std::unique_ptr<PiCamera> picamera(new PiCamera());
+    std::unique_ptr<PiCamera> picamera(new PiCamera(shader_manager->GetViewfinderWidth(), shader_manager->GetViewfinderHeight(), shader_manager->GetStillCaptureWidth(), shader_manager->GetStillCaptureHeight()));
 	picamera->Initialize();
     //picamera.StartViewfinder();
 	picamera->SetFrameManager(frame_manager);
@@ -134,11 +134,12 @@ int main(int argc, char **argv)
     bool photo_requested = false;
     bool prev_shader = false;
     bool next_shader = false;
-    int pixel_dims = shader_manager->GetHeight() * shader_manager->GetWidth();
+    size_t stillcapture_size = shader_manager->GetStillCaptureHeight() * shader_manager->GetStillCaptureWidth();
+    size_t viewfinder_size = shader_manager->GetViewfinderHeight() * shader_manager->GetViewfinderWidth();
     std::vector<uint8_t> vec_frame;
-	vec_frame.resize(pixel_dims * 4);
+	vec_frame.resize(viewfinder_size * 4);
     std::vector<uint8_t> cap_frame;
-    cap_frame.resize(pixel_dims * 1.5); // YUV420 encoding 
+    cap_frame.resize(stillcapture_size * 1.5); // YUV420 encoding 
     //glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     std::vector<unsigned char> drm_preview(640*480*4);
     void* ptr; 
@@ -158,14 +159,14 @@ int main(int argc, char **argv)
             LOG << "Starting Capture..." << std::endl;
 	        frame_manager->swap_capture(cap_frame); 
             
-            std::vector<unsigned char> rgb_out(pixel_dims * 4);
+            std::vector<unsigned char> rgb_out(stillcapture_size * 4);
 
             shader_manager->StillCaptureRender(cap_frame, picamera->stride, [&](void *data, size_t size) {
                 // Get data out of buffer
 				memcpy(rgb_out.data(), data, size);
             });
 
-            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetWidth(), height = shader_manager->GetHeight()]() {
+            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetStillCaptureWidth(), height = shader_manager->GetStillCaptureHeight()]() {
             stbi_write_png("debug-capture.png", width, height, 4, rgb_out.data(), width*4);
             }).detach();
             num_frame++;
