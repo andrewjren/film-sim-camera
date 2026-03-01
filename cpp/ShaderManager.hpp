@@ -73,7 +73,7 @@ private:
     int desiredHeight = 1944;
     int test_width = 2592;
     int test_height = 1944;
-    int viewfinder_width = 800;
+    int viewfinder_width = 900;
     int viewfinder_height = 600;
     const int screen_width = 640;
     const int screen_height = 480;

@@ -221,18 +221,19 @@ std::shared_ptr<libcamera::Camera> PiCamera::GetCamera() {
 void PiCamera::Configure() { 
     // Generate config for both Viewfinder and StillCapture
     config = camera->generateConfiguration( {libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
+
     LOG << "Default viewfinder configuration is: " << config->at(0).toString() << std::endl;
     viewfinder_config = std::make_shared<libcamera::StreamConfiguration>(config->at(0));
     config->at(0).size.width = viewfinder_width;
     config->at(0).size.height = viewfinder_height;
-    config->at(0).pixelFormat = libcamera::formats::XRGB8888;
+    config->at(0).pixelFormat = libcamera::formats::YUV420;
 
     LOG << "Default still capture configuration is: " << config->at(1).toString() << std::endl;
     stillcapture_config = std::make_shared<libcamera::StreamConfiguration>(config->at(1));
     config->at(1).size.width = stillcapture_width;
     config->at(1).size.height = stillcapture_height;
-    
-    config->validate();
+
+    LOG << "Config Status: " << config->validate();
     LOG << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;
     LOG << "Stride is: " << config->at(1).stride << std::endl;
     stride = config->at(1).stride;
