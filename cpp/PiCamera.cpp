@@ -225,6 +225,7 @@ void PiCamera::Configure() {
     viewfinder_config = std::make_shared<libcamera::StreamConfiguration>(config->at(0));
     config->at(0).size.width = viewfinder_width;
     config->at(0).size.height = viewfinder_height;
+    config->at(0).pixelFormat = libcamera::formats::XRGB8888;
 
     LOG << "Default still capture configuration is: " << config->at(1).toString() << std::endl;
     stillcapture_config = std::make_shared<libcamera::StreamConfiguration>(config->at(1));
@@ -238,7 +239,7 @@ void PiCamera::Configure() {
     LOG << "Pixel Format: " << config->at(1).pixelFormat.toString() << std::endl;
     camera->configure(config.get());
 }
-
+/*
 void PiCamera::ConfigureViewfinder() { // TODO: pass in parameters?
     config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
     
@@ -261,7 +262,7 @@ void PiCamera::ConfigureStillCapture() {
     LOG << "Validated still capture configuration is: " << config->at(0).toString() << std::endl;
     camera->configure(config.get());
 }
-
+*/
 void PiCamera::StartCamera() {
     camera->start();
     for (std::unique_ptr<libcamera::Request> &request : requests)

@@ -41,8 +41,8 @@ class PiCamera {
     void Initialize();
     void AllocateBuffers();
     std::shared_ptr<libcamera::Camera> GetCamera();
-    void ConfigureViewfinder();
-    void ConfigureStillCapture();
+    //void ConfigureViewfinder();
+    //void ConfigureStillCapture();
     void StartCamera();
     //void StartViewfinder();
     //void StartStillCapture();

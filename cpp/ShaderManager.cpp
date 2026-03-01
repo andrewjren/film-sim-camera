@@ -240,8 +240,6 @@ int ShaderManager::InitOpenGL() {
 
 void ShaderManager::InitTransformationMatrix() {
     // Transformation Matrix
-    float scale = float(screen_width) / float(test_width);
-    float image_ratio = float(test_width) / float(test_height);
     trans_mat = glm::mat4(1.0f);
     trans_mat = glm::rotate(trans_mat, glm::radians(-90.0f), glm::vec3(0.0, 0.0, 1.0));
 
@@ -429,7 +427,7 @@ void ShaderManager::InitViewfinderProgram() {
     for (int i = 0; i < num_buffers; i++) {
         glGenBuffers(1, &output_pbo[i]);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[i]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, viewfinder_width * viewfinder_height * 4, nullptr, GL_DYNAMIC_READ);
+        glBufferData(GL_PIXEL_PACK_BUFFER, screen_width * screen_height * 4, nullptr, GL_DYNAMIC_READ);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
     }
 
@@ -532,7 +530,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
 
     // Transfer to texture
     glActiveTexture(GL_TEXTURE0);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width, viewfinder_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
