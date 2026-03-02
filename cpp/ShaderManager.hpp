@@ -43,8 +43,10 @@ private:
     unsigned int lut_pbo;
     unsigned int output_pbo[3];
     const unsigned int num_buffers = 3;
+    unsigned int vf_y_texture, vf_u_texture, vf_v_texture;
     unsigned int y_texture, u_texture, v_texture;
     unsigned int rgb_pbo;
+    unsigned int vf_yTextureLoc, vf_uTextureLoc, vf_vTextureLoc, vf_lutTextureLoc;
     unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
     GLuint vao,vbo;
     GLuint text_vao, text_vbo;
