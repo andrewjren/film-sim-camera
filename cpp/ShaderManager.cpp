@@ -469,15 +469,15 @@ void ShaderManager::InitViewfinderProgram() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glGenTextures(1, &sc_u_texture);
-    glBindTexture(GL_TEXTURE_2D, sc_u_texture);
+    glGenTextures(1, &vf_u_texture);
+    glBindTexture(GL_TEXTURE_2D, vf_u_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width/2, viewfinder_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glGenTextures(1, &sc_v_texture);
-    glBindTexture(GL_TEXTURE_2D, sc_v_texture);
+    glBindTexture(GL_TEXTURE_2D, vf_v_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width/2, viewfinder_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -571,7 +571,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height);
 
     glActiveTexture(GL_TEXTURE8);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + (stride/2) * (viewfinder_height/2));
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + stride*viewfinder_height/4);
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
@@ -610,7 +610,10 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     }
     else {
         // report error with callback
+        LOG_ERR << "Viewfinder Callback\n";
     }
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 
@@ -655,13 +658,14 @@ void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stri
     glActiveTexture(GL_TEXTURE4);
     glUniform1i(sc_vTextureLoc, 4);
 
+    glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glViewport(0,0,test_width,test_height);
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
     // Read Framebuffer
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]); // TODO: new pbo for captured frame data?
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo); // TODO: new pbo for captured frame data?
     glReadPixels(0, 0, test_width, test_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     //ptr = (GLubyte*) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
     void *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, test_width * test_height * 4, GL_MAP_READ_BIT);
@@ -673,7 +677,9 @@ void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stri
     }
     else {
         // report error with callback
+        LOG_ERR << "StillCapture Callback\n";
     }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void ShaderManager::IncReadWriteIndex(int num_frame) {
