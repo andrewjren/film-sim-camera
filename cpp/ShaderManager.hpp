@@ -44,10 +44,10 @@ private:
     unsigned int output_pbo[3];
     const unsigned int num_buffers = 3;
     unsigned int vf_y_texture, vf_u_texture, vf_v_texture;
-    unsigned int y_texture, u_texture, v_texture;
+    unsigned int sc_y_texture, sc_u_texture, sc_v_texture;
     unsigned int rgb_pbo;
     unsigned int vf_yTextureLoc, vf_uTextureLoc, vf_vTextureLoc, vf_lutTextureLoc;
-    unsigned int yTextureLoc, uTextureLoc, vTextureLoc, lutTextureLoc;
+    unsigned int sc_yTextureLoc, sc_uTextureLoc, sc_vTextureLoc;
     GLuint vao,vbo;
     GLuint text_vao, text_vbo;
     GLuint program, vert, frag;
@@ -125,7 +125,7 @@ public:
     void TestProgram();
     void InitCaptureProgram();
     void InitViewfinderProgram();
-    void ViewfinderRender(std::vector<uint8_t> &,  std::function<void(void*, size_t)>);
+    void ViewfinderRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)>);
     void StillCaptureRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)>); 
     void IncReadWriteIndex(int);
 

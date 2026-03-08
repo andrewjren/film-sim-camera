@@ -304,16 +304,22 @@ void ShaderManager::BindTextures() {
     // Bind textures before rendering
     glViewport(0,0,test_width,test_height);
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, test_texture);
+    //glActiveTexture(GL_TEXTURE0);
+    //glBindTexture(GL_TEXTURE_2D, test_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_y_texture);
     glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_u_texture);
     glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_v_texture);
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_2D, vf_y_texture);
+    glActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_2D, vf_u_texture);
+    glActiveTexture(GL_TEXTURE8);
+    glBindTexture(GL_TEXTURE_2D, vf_v_texture);
 
     LOG << "after binding textures: " << glGetError() << std::endl;
 }
@@ -361,15 +367,15 @@ void ShaderManager::InitCaptureProgram() {
     unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, y_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_y_texture);
     glUniform1i(yTextureLoc, 2);
 
     glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_u_texture);
     glUniform1i(uTextureLoc, 3);
 
     glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_v_texture);
     glUniform1i(vTextureLoc, 4);
 
     glActiveTexture(GL_TEXTURE1);
@@ -409,12 +415,14 @@ void ShaderManager::InitViewfinderProgram() {
     LOG << "Set VF Image Size: " << viewfinder_width << ", " << viewfinder_height << std::endl;
 
     // setup texture for input images (from camera)
+    /*
     glGenTextures(1, &test_texture);
     glBindTexture(GL_TEXTURE_2D, test_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, viewfinder_width, viewfinder_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
+    */
 
     // setup pbo for input images (from camera)
     for (int i = 0; i < num_buffers; i++) {
@@ -431,29 +439,49 @@ void ShaderManager::InitViewfinderProgram() {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
     }
 
-    // setup texture for YUV input images (from camera)
-    glGenTextures(1, &y_texture);
-    glBindTexture(GL_TEXTURE_2D, y_texture);
+    // setup texture for YUV input images from camera for stillcapture
+    glGenTextures(1, &sc_y_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_y_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width, test_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glGenTextures(1, &u_texture);
-    glBindTexture(GL_TEXTURE_2D, u_texture);
+    glGenTextures(1, &sc_u_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_u_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glGenTextures(1, &v_texture);
-    glBindTexture(GL_TEXTURE_2D, v_texture);
+    glGenTextures(1, &sc_v_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_v_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, test_width/2, test_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    // setup texture for YUV input images from camera for viewfinder
+    glGenTextures(1, &vf_y_texture);
+    glBindTexture(GL_TEXTURE_2D, vf_y_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width, viewfinder_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
+    glGenTextures(1, &sc_u_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_u_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width/2, viewfinder_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenTextures(1, &sc_v_texture);
+    glBindTexture(GL_TEXTURE_2D, sc_v_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width/2, viewfinder_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     // setup pbo for output image (to file)
     glGenBuffers(1, &rgb_pbo);
@@ -512,9 +540,10 @@ void ShaderManager::InitViewfinderProgram() {
 }
 
 
-void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::function<void(void* data, size_t size)> callback) {
+void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride, std::function<void(void* data, size_t size)> callback) {
 
     // Provide buffer to write to
+    /*
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
     void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
 
@@ -525,14 +554,33 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, std::funct
     else {
         LOG << "camera ptr error" << std::endl;
     }
+    */
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, stride);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glActiveTexture(GL_TEXTURE6);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width, viewfinder_height, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data());
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, stride/2);
+
+    glActiveTexture(GL_TEXTURE7);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height);
+
+    glActiveTexture(GL_TEXTURE8);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + (stride/2) * (height/2));
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
     glUseProgram(program);
 
     // Transfer to texture
+    /*
     glActiveTexture(GL_TEXTURE0);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width, viewfinder_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    */
 
 
     // Render to Framebuffer
