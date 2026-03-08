@@ -36,8 +36,9 @@ class PiCamera {
     static std::shared_ptr<FrameManager> frame_manager;
     std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
     std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
-    unsigned int stride; // for correct YUV decoding
-    
+    unsigned int sc_stride; // for correct YUV decoding
+    unsigned int vf_stride; // for correct YUV decoding
+   
     void Initialize();
     void AllocateBuffers();
     std::shared_ptr<libcamera::Camera> GetCamera();

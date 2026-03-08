@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     size_t stillcapture_size = shader_manager->GetStillCaptureHeight() * shader_manager->GetStillCaptureWidth();
     size_t viewfinder_size = shader_manager->GetViewfinderHeight() * shader_manager->GetViewfinderWidth();
     std::vector<uint8_t> vec_frame;
-	vec_frame.resize(viewfinder_size * 4);
+	vec_frame.resize(viewfinder_size * 1.5);
     std::vector<uint8_t> cap_frame;
     cap_frame.resize(stillcapture_size * 1.5); // YUV420 encoding 
     //glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
             
             std::vector<unsigned char> rgb_out(stillcapture_size * 4);
 
-            shader_manager->StillCaptureRender(cap_frame, picamera->stride, [&](void *data, size_t size) {
+            shader_manager->StillCaptureRender(cap_frame, picamera->sc_stride, [&](void *data, size_t size) {
                 // Get data out of buffer
 				memcpy(rgb_out.data(), data, size);
             });
@@ -188,7 +188,7 @@ int main(int argc, char **argv)
             // get data 
             frame_manager->swap_buffers(vec_frame);
             std::chrono::duration<float> swap_ms = std::chrono::system_clock::now() - start_time;
-            shader_manager->ViewfinderRender(vec_frame, [&](void *data, size_t size) {
+            shader_manager->ViewfinderRender(vec_frame, picamera->vf_stride, [&](void *data, size_t size) {
                 // write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
 					memcpy(&iter->map[0],data,size);

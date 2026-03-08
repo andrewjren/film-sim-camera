@@ -235,8 +235,10 @@ void PiCamera::Configure() {
 
     LOG << "Config Status: " << config->validate();
     LOG << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;
-    LOG << "Stride is: " << config->at(1).stride << std::endl;
-    stride = config->at(1).stride;
+    LOG << "Stride[0] is: " << config->at(0).stride << std::endl;
+    vf_stride = config->at(0).stride;
+    LOG << "Stride[1] is: " << config->at(1).stride << std::endl;
+    sc_stride = config->at(1).stride;
     LOG << "Pixel Format: " << config->at(1).pixelFormat.toString() << std::endl;
     camera->configure(config.get());
 }

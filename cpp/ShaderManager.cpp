@@ -360,29 +360,29 @@ void ShaderManager::InitCaptureProgram() {
     glUseProgram(yuv2rgb_program);
 
 
-    yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
-    uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
-    vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
+    sc_yTextureLoc = glGetUniformLocation(yuv2rgb_program, "yTexture");
+    sc_uTextureLoc = glGetUniformLocation(yuv2rgb_program, "uTexture");
+    sc_vTextureLoc = glGetUniformLocation(yuv2rgb_program, "vTexture");
     lutTextureLoc = glGetUniformLocation(yuv2rgb_program, "clut");
     unsigned int rot_loc = glGetUniformLocation(yuv2rgb_program, "rotate");
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, sc_y_texture);
-    glUniform1i(yTextureLoc, 2);
+    glUniform1i(sc_yTextureLoc, 2);
 
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, sc_u_texture);
-    glUniform1i(uTextureLoc, 3);
+    glUniform1i(sc_uTextureLoc, 3);
 
     glActiveTexture(GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_2D, sc_v_texture);
-    glUniform1i(vTextureLoc, 4);
+    glUniform1i(sc_vTextureLoc, 4);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, lut_texture);
     glUniform1i(lutTextureLoc, 1);
 
-    LOG << "yuv texture locs: " << yTextureLoc << ", " << uTextureLoc << ", " << vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
+    LOG << "yuv texture locs: " << sc_yTextureLoc << ", " << sc_uTextureLoc << ", " << sc_vTextureLoc << ", " << lutTextureLoc << ", " << rot_loc << std::endl;
     glUniformMatrix4fv(rot_loc, 1, GL_FALSE, glm::value_ptr(rot_mat));
 
     ValidateProgram(yuv2rgb_program);
@@ -495,8 +495,11 @@ void ShaderManager::InitViewfinderProgram() {
 
     LOG << "before setting uniforms: " << glGetError() << std::endl;
     // Set uniforms
-    glUniform1i(glGetUniformLocation(program, "image"), 0);
+    //glUniform1i(glGetUniformLocation(program, "image"), 0);
     glUniform1i(glGetUniformLocation(program, "clut"), 1);
+    glUniform1i(glGetUniformLocation(program, "yTexture"), 6);
+    glUniform1i(glGetUniformLocation(program, "uTexture"), 7);
+    glUniform1i(glGetUniformLocation(program, "vTexture"), 8);
 
     unsigned int trans_loc = glGetUniformLocation(program, "transform");
     glUniformMatrix4fv(trans_loc, 1, GL_FALSE, glm::value_ptr(trans_mat));
@@ -568,7 +571,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height);
 
     glActiveTexture(GL_TEXTURE8);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + (stride/2) * (height/2));
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + (stride/2) * (viewfinder_height/2));
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
@@ -597,7 +600,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     // Read Framebuffer for DRM preview
     glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
     glReadPixels(0, 0, screen_height, screen_width, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, screen_width * screen_height * 4, GL_MAP_READ_BIT);
+    void* ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, screen_width * screen_height * 4, GL_MAP_READ_BIT);
 
     // use callback function to move memory out, then unmap buffer
     if (ptr && callback) {
@@ -644,13 +647,13 @@ void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stri
 
     // TODO: delete these after confirming setting them in init is enough
     glActiveTexture(GL_TEXTURE2);
-    glUniform1i(yTextureLoc, 2);
+    glUniform1i(sc_yTextureLoc, 2);
 
     glActiveTexture(GL_TEXTURE3);
-    glUniform1i(uTextureLoc, 3);
+    glUniform1i(sc_uTextureLoc, 3);
 
     glActiveTexture(GL_TEXTURE4);
-    glUniform1i(vTextureLoc, 4);
+    glUniform1i(sc_vTextureLoc, 4);
 
     glViewport(0,0,test_width,test_height);
 

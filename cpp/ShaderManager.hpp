@@ -46,7 +46,7 @@ private:
     unsigned int vf_y_texture, vf_u_texture, vf_v_texture;
     unsigned int sc_y_texture, sc_u_texture, sc_v_texture;
     unsigned int rgb_pbo;
-    unsigned int vf_yTextureLoc, vf_uTextureLoc, vf_vTextureLoc, vf_lutTextureLoc;
+    unsigned int vf_yTextureLoc, vf_uTextureLoc, vf_vTextureLoc, lutTextureLoc;
     unsigned int sc_yTextureLoc, sc_uTextureLoc, sc_vTextureLoc;
     GLuint vao,vbo;
     GLuint text_vao, text_vbo;
@@ -75,7 +75,7 @@ private:
     int desiredHeight = 1944;
     int test_width = 2592;
     int test_height = 1944;
-    int viewfinder_width = 900;
+    int viewfinder_width = 800;
     int viewfinder_height = 600;
     const int screen_width = 640;
     const int screen_height = 480;
