@@ -28,5 +28,5 @@ void main()
     
     // Clamp to valid range
     orig_color = clamp(orig_color, 0.0, 1.0);
-    fragColor = texture(clut, orig_color);
+    fragColor = texture(clut, orig_color.bgr);
 }

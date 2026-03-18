@@ -543,21 +543,13 @@ void ShaderManager::InitViewfinderProgram() {
 }
 
 
+// TODO: ViewfinderRender for some reason produces the image in BGR as opposed to RGB. this is compensated for in the shader, but should understand why this is happening
 void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride, std::function<void(void* data, size_t size)> callback) {
 
-    // Provide buffer to write to
-    /*
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[write_index]);
-    void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, vec_frame.size(), GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
-
-    if (ptr) {
-        memcpy(ptr, vec_frame.data(), vec_frame.size());
-        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-    }
-    else {
-        LOG << "camera ptr error" << std::endl;
-    }
-    */
+    int u_offset = stride*viewfinder_height;
+    int v_offset = u_offset + stride*viewfinder_height/4;
+ 
+    glUseProgram(program);
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -568,22 +560,12 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride/2);
 
     glActiveTexture(GL_TEXTURE7);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + u_offset);
 
     glActiveTexture(GL_TEXTURE8);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + stride * viewfinder_height + stride*viewfinder_height/4);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width/2, viewfinder_height/2, GL_RED, GL_UNSIGNED_BYTE, vec_frame.data() + v_offset);
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-
-    glUseProgram(program);
-
-    // Transfer to texture
-    /*
-    glActiveTexture(GL_TEXTURE0);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewfinder_width, viewfinder_height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    */
 
 
     // Render to Framebuffer
@@ -618,45 +600,29 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
 
 
 void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stride, std::function<void(void* data, size_t size)> callback) {
-    std::vector<uint8_t>::const_iterator y_end = cap_frame.begin() + stride*test_height;
-    std::vector<uint8_t>::const_iterator u_end = y_end + stride*test_height/4;
-    std::vector<uint8_t>::const_iterator v_end = cap_frame.end();
 
-    std::vector<uint8_t> y_data(cap_frame.cbegin(), y_end);
-    std::vector<uint8_t> u_data(y_end, u_end);
-    std::vector<uint8_t> v_data(u_end, v_end);
-    std::vector<uint8_t> uv_data(y_end, cap_frame.cend());
-
+    int u_offset = stride*GetStillCaptureHeight();
+    int v_offset = u_offset + stride*GetStillCaptureHeight()/4;
+ 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     glActiveTexture(GL_TEXTURE2);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, y_data.data());
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width, test_height, GL_RED, GL_UNSIGNED_BYTE, cap_frame.data());
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride/2);
 
     glActiveTexture(GL_TEXTURE3);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, u_data.data());
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, cap_frame.data() + u_offset);
 
     glActiveTexture(GL_TEXTURE4);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, v_data.data());
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, test_width/2, test_height/2, GL_RED, GL_UNSIGNED_BYTE, cap_frame.data() + v_offset);
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     
-    //ValidateProgram(yuv2rgb_program);
-
     glUseProgram(yuv2rgb_program);
     LOG << "Use program: " << glGetError() << std::endl;
 
-    // TODO: delete these after confirming setting them in init is enough
-    glActiveTexture(GL_TEXTURE2);
-    glUniform1i(sc_yTextureLoc, 2);
-
-    glActiveTexture(GL_TEXTURE3);
-    glUniform1i(sc_uTextureLoc, 3);
-
-    glActiveTexture(GL_TEXTURE4);
-    glUniform1i(sc_vTextureLoc, 4);
 
     glBindFramebuffer(GL_FRAMEBUFFER, dstFBO);
     glViewport(0,0,test_width,test_height);

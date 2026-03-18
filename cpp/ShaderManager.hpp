@@ -71,10 +71,8 @@ private:
     int read_index;
     int write_index;
     int lut_index = 0;
-    int desiredWidth = 2592; // TODO: Remove instances of desired width and height
-    int desiredHeight = 1944;
-    int test_width = 2592;
-    int test_height = 1944;
+    int test_width = 2592/2;
+    int test_height = 1944/2;
     int viewfinder_width = 800;
     int viewfinder_height = 600;
     const int screen_width = 640;

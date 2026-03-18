@@ -166,9 +166,11 @@ int main(int argc, char **argv)
 				memcpy(rgb_out.data(), data, size);
             });
 
-            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetStillCaptureWidth(), height = shader_manager->GetStillCaptureHeight()]() {
+            stbi_write_png("debug-capture.png", shader_manager->GetStillCaptureWidth(), shader_manager->GetStillCaptureHeight(), 4, rgb_out.data(),shader_manager->GetStillCaptureWidth()*4); 
+/*            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetStillCaptureWidth(), height = shader_manager->GetStillCaptureHeight()]() {
             stbi_write_png("debug-capture.png", width, height, 4, rgb_out.data(), width*4);
             }).detach();
+*/
             num_frame++;
         }
         if (next_shader || prev_shader) {
@@ -187,7 +189,6 @@ int main(int argc, char **argv)
         if (frame_manager->data_available()) {
             // get data 
             frame_manager->swap_buffers(vec_frame);
-            std::chrono::duration<float> swap_ms = std::chrono::system_clock::now() - start_time;
             shader_manager->ViewfinderRender(vec_frame, picamera->vf_stride, [&](void *data, size_t size) {
                 // write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
@@ -206,7 +207,7 @@ int main(int argc, char **argv)
 */
 
             std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
-            LOG << "Frame: " << num_frame << " | swap time: " << swap_ms.count() << " | render time: " << elapsed_ms.count() - swap_ms.count() << "\n";
+            LOG << "Frame: " << num_frame << " | render time: " << elapsed_ms.count() << "\n";
             num_frame++;
 			
 			
