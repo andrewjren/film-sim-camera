@@ -354,8 +354,8 @@ void ShaderManager::InitCaptureProgram() {
     glLinkProgram(yuv2rgb_program);
     LOG << "link yuv2rgb shader: " << glGetError() << std::endl;
 
-    //glDeleteShader(yuv2rgb_frag);
-    //glDeleteShader(yuv2rgb_vert);
+    glDeleteShader(yuv2rgb_frag);
+    glDeleteShader(yuv2rgb_vert);
 
     glUseProgram(yuv2rgb_program);
 
@@ -389,55 +389,6 @@ void ShaderManager::InitCaptureProgram() {
     
     glUseProgram(yuv2rgb_program);
     LOG << "Using yuv program: " << glGetError() << std::endl;
-}
-
-void ShaderManager::InitViewfinderProgram() {
-    // Create shader program for Viewfinder
-    // Create a shader program
-    // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
-    // Read an OpenGL tutorial to properly implement shader creation
-    program = glCreateProgram();
-    vert = LoadShader(GL_VERTEX_SHADER, viewfinder_vs_path.c_str());
-
-    frag = LoadShader(GL_FRAGMENT_SHADER, viewfinder_fs_path.c_str());
-
-    glAttachShader(program, frag);
-    glAttachShader(program, vert);
-    LOG << "attaching shaders: " << glGetError() << std::endl;
-    glLinkProgram(program);
-    LOG << "linking program: " << glGetError() << std::endl;
-    glUseProgram(program);
-
-    //glDeleteShader(frag);
-    //glDeleteShader(vert);
-
-
-    LOG << "Set VF Image Size: " << viewfinder_width << ", " << viewfinder_height << std::endl;
-
-    // setup texture for input images (from camera)
-    /*
-    glGenTextures(1, &test_texture);
-    glBindTexture(GL_TEXTURE_2D, test_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, viewfinder_width, viewfinder_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    */
-
-    // setup pbo for input images (from camera)
-    for (int i = 0; i < num_buffers; i++) {
-        glGenBuffers(1, &input_pbo[i]);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[i]);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, viewfinder_width * viewfinder_height * 4, nullptr, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
-    }
-    // setup pbo for output image (to screen)
-    for (int i = 0; i < num_buffers; i++) {
-        glGenBuffers(1, &output_pbo[i]);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[i]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, screen_width * screen_height * 4, nullptr, GL_DYNAMIC_READ);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
-    }
 
     // setup texture for YUV input images from camera for stillcapture
     glGenTextures(1, &sc_y_texture);
@@ -461,6 +412,53 @@ void ShaderManager::InitViewfinderProgram() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    // setup pbo for output image (to file)
+    glGenBuffers(1, &rgb_pbo);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
+    glBufferData(GL_PIXEL_PACK_BUFFER, test_width * test_height * 4, nullptr, GL_DYNAMIC_READ);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+
+
+}
+
+void ShaderManager::InitViewfinderProgram() {
+    // Create shader program for Viewfinder
+    // Create a shader program
+    // NO ERRRO CHECKING IS DONE! (for the purpose of this example)
+    // Read an OpenGL tutorial to properly implement shader creation
+    program = glCreateProgram();
+    vert = LoadShader(GL_VERTEX_SHADER, viewfinder_vs_path.c_str());
+
+    frag = LoadShader(GL_FRAGMENT_SHADER, viewfinder_fs_path.c_str());
+
+    glAttachShader(program, frag);
+    glAttachShader(program, vert);
+    LOG << "attaching shaders: " << glGetError() << std::endl;
+    glLinkProgram(program);
+    LOG << "linking program: " << glGetError() << std::endl;
+    glUseProgram(program);
+
+    glDeleteShader(frag);
+    glDeleteShader(vert);
+
+
+    LOG << "Set VF Image Size: " << viewfinder_width << ", " << viewfinder_height << std::endl;
+
+    // setup pbo for input images (from camera)
+    for (int i = 0; i < num_buffers; i++) {
+        glGenBuffers(1, &input_pbo[i]);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, input_pbo[i]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, viewfinder_width * viewfinder_height * 4, nullptr, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // unbind
+    }
+    // setup pbo for output image (to screen)
+    for (int i = 0; i < num_buffers; i++) {
+        glGenBuffers(1, &output_pbo[i]);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[i]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, screen_width * screen_height * 4, nullptr, GL_DYNAMIC_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
+    }
+
     // setup texture for YUV input images from camera for viewfinder
     glGenTextures(1, &vf_y_texture);
     glBindTexture(GL_TEXTURE_2D, vf_y_texture);
@@ -482,12 +480,6 @@ void ShaderManager::InitViewfinderProgram() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
-
-    // setup pbo for output image (to file)
-    glGenBuffers(1, &rgb_pbo);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, rgb_pbo);
-    glBufferData(GL_PIXEL_PACK_BUFFER, test_width * test_height * 4, nullptr, GL_DYNAMIC_READ);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // unbind
 
 
     // load lut image 
