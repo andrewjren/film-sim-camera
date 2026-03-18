@@ -476,7 +476,7 @@ void ShaderManager::InitViewfinderProgram() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glGenTextures(1, &sc_v_texture);
+    glGenTextures(1, &vf_v_texture);
     glBindTexture(GL_TEXTURE_2D, vf_v_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, viewfinder_width/2, viewfinder_height/2, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
