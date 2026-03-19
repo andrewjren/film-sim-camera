@@ -156,6 +156,8 @@ void PiCamera::CreateRequests() {
 
             libcamera::ControlList &controls = request->controls();
             controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+            controls.set(libcamera::controls::draft::NoiseReductionMode, 
+             libcamera::controls::draft::NoiseReductionModeHighQuality);
 
             requests.push_back(std::move(request));
         }
@@ -184,6 +186,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     // Can be done outside of this as a callback, handle update to buffer 
     // Viewfinder buffers 4 frames at a time - just process one 
+    // TODO: am I not processing enoguh frames in this method from the viewfinder?
     libcamera::Stream *viewfinder_stream = config->at(0).stream();
     libcamera::Stream *stillcapture_stream = config->at(1).stream();
     libcamera::FrameBuffer *viewfinder_buffer = request->findBuffer(viewfinder_stream); //frame_buffers[stream][0].get();
@@ -233,13 +236,15 @@ void PiCamera::Configure() {
     config->at(1).size.width = stillcapture_width;
     config->at(1).size.height = stillcapture_height;
 
-    LOG << "Config Status: " << config->validate();
+    LOG << "Config Status: " << config->validate() << "\n";
     LOG << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;
-    LOG << "Stride[0] is: " << config->at(0).stride << std::endl;
+
+//    LOG << "Stride[0] is: " << config->at(0).stride << std::endl;
     vf_stride = config->at(0).stride;
-    LOG << "Stride[1] is: " << config->at(1).stride << std::endl;
+//    LOG << "Stride[1] is: " << config->at(1).stride << std::endl;
     sc_stride = config->at(1).stride;
-    LOG << "Pixel Format: " << config->at(1).pixelFormat.toString() << std::endl;
+//    LOG << "Pixel Format: " << config->at(1).pixelFormat.toString() << std::endl;
+
     camera->configure(config.get());
 }
 /*

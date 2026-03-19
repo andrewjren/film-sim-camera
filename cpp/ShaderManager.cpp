@@ -33,6 +33,16 @@ void ShaderManager::CheckGlCompileErrors(GLuint shader)
     }
 }
 
+void ShaderManager::Initialize() {
+    InitOpenGL();
+    InitTransformationMatrix();
+    InitCaptureProgram();
+    InitViewfinderProgram();
+    TestProgram();
+    BindTextures();
+    InitFreetype();
+}
+
 void ShaderManager::ValidateProgram(GLuint program) {
     LOG << "Program ID: " << program << std::endl;
 
@@ -588,6 +598,7 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     }
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    IncReadWriteIndex();
 }
 
 
@@ -640,9 +651,9 @@ void ShaderManager::StillCaptureRender(std::vector<uint8_t> &cap_frame, int stri
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void ShaderManager::IncReadWriteIndex(int num_frame) {
-    write_index = num_frame % num_buffers;
-    read_index = (num_frame + num_buffers - 2) % num_buffers; // previous frame
+void ShaderManager::IncReadWriteIndex() {
+    write_index = (write_index + 1) % num_buffers;
+    read_index = (read_index + 1) % num_buffers; 
 }
 
 int ShaderManager::GetNumLuts() {

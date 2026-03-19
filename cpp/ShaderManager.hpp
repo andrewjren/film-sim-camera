@@ -68,11 +68,11 @@ private:
 
     GLuint text_program, text_vert, text_frag;
 
-    int read_index;
-    int write_index;
+    int read_index = 1;
+    int write_index = 0;
     int lut_index = 0;
-    int test_width = 2592/2;
-    int test_height = 1944/2;
+    int test_width = 2592;
+    int test_height = 1944;
     int viewfinder_width = 800;
     int viewfinder_height = 600;
     const int screen_width = 640;
@@ -107,28 +107,30 @@ private:
     static const char *eglGetErrorStr();
     static void ValidateProgram(GLuint);
 
+    int InitOpenGL();
+    void InitTransformationMatrix();
+    void InitCaptureProgram();
+    void InitViewfinderProgram();
+    void TestProgram();
+    void BindTextures();
+    void InitFreetype();
+    void IncReadWriteIndex();
 public:
     ShaderManager() {
         trans_mat = glm::mat4(1.0f);
         rot_mat = glm::mat4(1.0f);
 
     }
+    
+    void Initialize();
 
     void SwitchLUT(int);
     void LoadLUTs();
     GLuint LoadShader(GLenum, const std::string &);
-    int InitOpenGL();
-    void InitTransformationMatrix(); 
-    void BindTextures();
-    void TestProgram();
-    void InitCaptureProgram();
-    void InitViewfinderProgram();
     void ViewfinderRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)>);
     void StillCaptureRender(std::vector<uint8_t> &, int, std::function<void(void*, size_t)>); 
-    void IncReadWriteIndex(int);
 
     // Font Management
-    void InitFreetype();
     void RenderText(std::string, float, float, float, glm::vec3);
 
     int GetStillCaptureHeight();

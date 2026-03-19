@@ -117,17 +117,9 @@ int main(int argc, char **argv)
     }
 
     /* OpenGL stuff */ 
-    shader_manager->InitOpenGL();
-    shader_manager->InitTransformationMatrix();
-	
-    shader_manager->InitCaptureProgram();
-    shader_manager->InitViewfinderProgram();
-    shader_manager->TestProgram();
-    shader_manager->BindTextures();
-    shader_manager->InitFreetype();
+    shader_manager->Initialize();
 
 	picamera->StartCamera();
-    //picamera.CreateRequests();
     
     // initialize variables
     int num_frame = 0;
@@ -151,7 +143,6 @@ int main(int argc, char **argv)
         photo_requested = touchscreen->ProcessPhotoRequest();
         prev_shader = touchscreen->ProcessPrevShader();
         next_shader = touchscreen->ProcessNextShader();
-        shader_manager->IncReadWriteIndex(num_frame); // TODO: move this into shadermanager 
         
 
         if (photo_requested) {
