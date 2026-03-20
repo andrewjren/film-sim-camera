@@ -10,7 +10,9 @@
 
 enum CaptureMode{
 	eViewfinder,
-	eStillCapture
+    eCaptureRequested,
+	eCaptureQueued,
+    eCaptureAvailable
 };
 
 class PiCamera {
@@ -53,6 +55,8 @@ class PiCamera {
     void MapBuffers();
     void Configure();
     void CreateRequests();
+    void RequestCapture();
+    bool IsCaptureAvailable();
 };
 
 #endif // CPP_PICAMERA_HPP

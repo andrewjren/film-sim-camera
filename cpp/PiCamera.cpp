@@ -66,6 +66,19 @@ void PiCamera::StartStillCapture() {
     camera->requestCompleted.connect(requestComplete);
 }
 */
+
+void PiCamera::RequestCapture() {
+    capture_mode = eCaptureRequested;
+}
+
+bool PiCamera::IsCaptureAvailable() {
+    return capture_mode == eCaptureAvailable;
+}
+
+void PiCamera::CaptureComplete() {
+    capture_mode = eViewfinder;
+}
+
 void PiCamera::AllocateBuffers() {
 
     for (libcamera::StreamConfiguration &cfg : *config) {
@@ -192,14 +205,29 @@ void PiCamera::requestComplete(libcamera::Request *request)
     libcamera::FrameBuffer *viewfinder_buffer = request->findBuffer(viewfinder_stream); //frame_buffers[stream][0].get();
     libcamera::FrameBuffer *stillcapture_buffer = request->findBuffer(stillcapture_stream);
 
+    // Get Controls to set camera settings 
+    libcamera::ControlList &controls = request->controls();
+    controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+    controls.set(libcamera::controls::draft::NoiseReductionMode, 
+      libcamera::controls::draft::NoiseReductionModeOff);
+
     if (viewfinder_buffer) {
         std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[viewfinder_buffer];
         frame_manager->update(mapped_span[0].data(), mapped_span[0].size());
     }
     
     else if (stillcapture_buffer) {
-        std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
-        frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
+        if (capture_mode == eCaptureQueued) {
+            std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
+            frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
+            capture_mode = eCaptureAvailable; // indicate capture is available
+        }
+        else if (capture_mode == eCaptureRequested) {
+            controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+            controls.set(libcamera::controls::draft::NoiseReductionMode, 
+              libcamera::controls::draft::NoiseReductionModeHighQuality); 
+            capture_mode = eCaptureQueued; // queue for next capture
+        }
     }
     
     else {

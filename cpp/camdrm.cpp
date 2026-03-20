@@ -147,8 +147,12 @@ int main(int argc, char **argv)
 
         if (photo_requested) {
             LOG << "Frame: " << num_frame << std::endl;
-            LOG << "Starting Capture..." << std::endl;
-	        frame_manager->swap_capture(cap_frame); 
+            LOG << "Requesting Capture..." << std::endl;
+        }
+        else if (picamera->IsCaptureAvailable()) {
+            LOG << "Capture Available!" << std::endl;
+
+            frame_manager->swap_capture(cap_frame); 
             
             std::vector<unsigned char> rgb_out(stillcapture_size * 4);
 
@@ -164,6 +168,7 @@ int main(int argc, char **argv)
 */
             num_frame++;
         }
+
         if (next_shader || prev_shader) {
             LOG << "Changing Shader" << std::endl;
             int num_luts = shader_manager->GetNumLuts();
