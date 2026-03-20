@@ -9,6 +9,7 @@ std::map<libcamera::FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> PiCame
 std::shared_ptr<libcamera::Camera> PiCamera::camera;
 std::unique_ptr<libcamera::CameraConfiguration> PiCamera::config;
 std::shared_ptr<FrameManager> PiCamera::frame_manager;
+CaptureMode PiCamera::capture_mode;
 
 PiCamera::PiCamera(int vf_width, int vf_height, int sc_width, int sc_height) {
     viewfinder_width = vf_width;
@@ -166,11 +167,10 @@ void PiCamera::CreateRequests() {
                 LOG_ERR << "Can't set buffer for request" << std::endl;
                 return;// ret;
             }
-
             libcamera::ControlList &controls = request->controls();
             controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
             controls.set(libcamera::controls::draft::NoiseReductionMode, 
-             libcamera::controls::draft::NoiseReductionModeHighQuality);
+              libcamera::controls::draft::NoiseReductionModeOff);
 
             requests.push_back(std::move(request));
         }
@@ -207,9 +207,6 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     // Get Controls to set camera settings 
     libcamera::ControlList &controls = request->controls();
-    controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
-    controls.set(libcamera::controls::draft::NoiseReductionMode, 
-      libcamera::controls::draft::NoiseReductionModeOff);
 
     if (viewfinder_buffer) {
         std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[viewfinder_buffer];
@@ -220,13 +217,21 @@ void PiCamera::requestComplete(libcamera::Request *request)
         if (capture_mode == eCaptureQueued) {
             std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
             frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
+            controls.set(libcamera::controls::draft::NoiseReductionMode, 
+              libcamera::controls::draft::NoiseReductionModeOff);
             capture_mode = eCaptureAvailable; // indicate capture is available
         }
         else if (capture_mode == eCaptureRequested) {
-            controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+            LOG << "requested\n";
             controls.set(libcamera::controls::draft::NoiseReductionMode, 
               libcamera::controls::draft::NoiseReductionModeHighQuality); 
-            capture_mode = eCaptureQueued; // queue for next capture
+            capture_mode = eCaptureSkipped; // queue for next capture
+        }
+        else if (capture_mode == eCaptureSkipped) {
+            capture_mode = eCaptureSkipped2;
+        }
+        else if (capture_mode == eCaptureSkipped2) {
+            capture_mode = eCaptureQueued;
         }
     }
     

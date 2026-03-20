@@ -12,6 +12,8 @@ enum CaptureMode{
 	eViewfinder,
     eCaptureRequested,
 	eCaptureQueued,
+    eCaptureSkipped,
+    eCaptureSkipped2,
     eCaptureAvailable
 };
 
@@ -34,7 +36,7 @@ class PiCamera {
 
     public:
     PiCamera(int, int, int, int);
-    CaptureMode capture_mode; 
+    static CaptureMode capture_mode; 
     static std::shared_ptr<FrameManager> frame_manager;
     std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
     std::shared_ptr<libcamera::StreamConfiguration> stillcapture_config;
@@ -57,6 +59,7 @@ class PiCamera {
     void CreateRequests();
     void RequestCapture();
     bool IsCaptureAvailable();
+    void CaptureComplete();
 };
 
 #endif // CPP_PICAMERA_HPP

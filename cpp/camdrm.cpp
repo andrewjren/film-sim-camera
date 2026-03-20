@@ -148,6 +148,7 @@ int main(int argc, char **argv)
         if (photo_requested) {
             LOG << "Frame: " << num_frame << std::endl;
             LOG << "Requesting Capture..." << std::endl;
+            picamera->RequestCapture();
         }
         else if (picamera->IsCaptureAvailable()) {
             LOG << "Capture Available!" << std::endl;
@@ -166,6 +167,7 @@ int main(int argc, char **argv)
             stbi_write_png("debug-capture.png", width, height, 4, rgb_out.data(), width*4);
             }).detach();
 */
+            picamera->CaptureComplete();
             num_frame++;
         }
 
