@@ -185,7 +185,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     struct dma_buf_sync dma_sync {};
 	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
-    libcamera::BufferMap buffer_map(std::move(request->buffers()));
+    std::map<const libcamera::Stream*, libcamera::FrameBuffer*> buffer_map(std::move(request->buffers()));
 	for (auto const &p : buffer_map)
 	{
 		auto it = mapped_buffers.find(p.second);
