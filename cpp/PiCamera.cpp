@@ -185,13 +185,14 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     struct dma_buf_sync dma_sync {};
 	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
-	for (auto const &buffer_map : request->buffers())
+    libcamera::BufferMap buffer_map(std::move(request->buffers()));
+	for (auto const &p : buffer_map)
 	{
-		auto it = mapped_buffers.find(buffer_map.second);
+		auto it = mapped_buffers.find(p.second);
 		if (it == mapped_buffers.end())
 			throw std::runtime_error("failed to identify request complete buffer");
 
-		int ret = ::ioctl(buffer_map.second->planes()[0].fd.get(), DMA_BUF_IOCTL_SYNC, &dma_sync);
+		int ret = ::ioctl(p.second->planes()[0].fd.get(), DMA_BUF_IOCTL_SYNC, &dma_sync);
 		if (ret)
 			throw std::runtime_error("failed to sync dma buf on request complete");
 	}
