@@ -136,9 +136,9 @@ int main(int argc, char **argv)
     std::vector<unsigned char> drm_preview(640*480*4);
     void* ptr; 
     int lut_index = 0;
+    std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
     while(num_frame < 1000) {
 
-        std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
         prev_shader = touchscreen->ProcessPrevShader();
@@ -205,7 +205,8 @@ int main(int argc, char **argv)
 */
 
             std::chrono::duration<float> elapsed_ms = std::chrono::system_clock::now() - start_time;
-            LOG << "Frame: " << num_frame << " | render time: " << elapsed_ms.count() << "\n";
+            start_time = std::chrono::system_clock::now();
+            LOG << "Frame: " << num_frame << " | frame time: " << elapsed_ms.count() << "\n";
             num_frame++;
 			
 			
