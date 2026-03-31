@@ -26,6 +26,7 @@ target_include_directories(libpicamera PUBLIC
 target_link_libraries(libpicamera PUBLIC 
   ${LIBCAMERA_LINK_LIBRARIES}
   )
+target_compile_options(libpicamera PRIVATE -O2 -g)
 
 add_executable(camdrm camdrm.cpp dma_heaps.cpp ShaderManager.cpp)
 target_include_directories(camdrm PRIVATE 
@@ -51,4 +52,5 @@ target_link_libraries(camdrm PRIVATE
   libpicamera
   ${FREETYPE_LIBRARIES}
   )
+target_compile_options(camdrm PRIVATE -O2 -g)
 
