@@ -5,6 +5,7 @@
 #include <mutex>
 #include <vector>
 #include <cstring>
+#include <log.hpp>
 
 /* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
    frame data. this avoids the possibility of the camera thread overflowing the queue. order is less important for the 

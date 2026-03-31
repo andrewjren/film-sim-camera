@@ -46,30 +46,14 @@ void PiCamera::Initialize() {
 
     camera->requestCompleted.connect(requestComplete);
 }
-/*
-void PiCamera::StartViewfinder() {
-    allocator = new libcamera::FrameBufferAllocator(camera);
 
-    ConfigureViewfinder();
-    MapBuffers();
-    AllocateBuffers();
-
-    camera->requestCompleted.connect(requestComplete);
-}
-
-void PiCamera::StartStillCapture() {
-    allocator = new libcamera::FrameBufferAllocator(camera);
-
-    ConfigureStillCapture();
-    MapBuffers();
-    AllocateBuffers();
-
-    camera->requestCompleted.connect(requestComplete);
-}
-*/
 
 void PiCamera::RequestCapture() {
     capture_mode = eCaptureRequested;
+   
+    camera->queueRequest(stillcapture_requests[0].get());
+
+
 }
 
 bool PiCamera::IsCaptureAvailable() {
@@ -147,33 +131,55 @@ void PiCamera::MapBuffers() {
     }
 }
 
+// TODO: update this to create requests for the viewfinder stream, but not for the stillcapture stream. 
+// how shoul
 void PiCamera::CreateRequests() {
-    for (libcamera::StreamConfiguration &stream_config : *config) {
-        libcamera::Stream *stream = stream_config.stream();
+    libcamera::Stream *viewfinder_stream = config->at(1).stream();
+    libcamera::Stream *stillcapture_stream = config->at(0).stream();
+
         
-        for (const auto& buffer : frame_buffers[stream]) {
-            std::unique_ptr<libcamera::Request> request = camera->createRequest();
-            if (!request)
-            {
-                LOG_ERR << "Can't create request" << std::endl;
-                return;// -ENOMEM;
-            }
-
-            //const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
-            //const std::unique_ptr<libcamera::FrameBuffer> &buffer = pair.second;
-            int ret = request->addBuffer(stream, buffer.get());
-            if (ret < 0)
-            {
-                LOG_ERR << "Can't set buffer for request" << std::endl;
-                return;// ret;
-            }
-            libcamera::ControlList &controls = request->controls();
-            controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
-            controls.set(libcamera::controls::draft::NoiseReductionMode, 
-              libcamera::controls::draft::NoiseReductionModeFast);
-
-            requests.push_back(std::move(request));
+    for (const auto& buffer : frame_buffers[viewfinder_stream]) {
+        std::unique_ptr<libcamera::Request> request = camera->createRequest();
+        if (!request)
+        {
+            LOG_ERR << "Can't create request" << std::endl;
+            return;// -ENOMEM;
         }
+
+        int ret = request->addBuffer(viewfinder_stream, buffer.get());
+        if (ret < 0)
+        {
+            LOG_ERR << "Can't set buffer for request" << std::endl;
+            return;// ret;
+        }
+        libcamera::ControlList &controls = request->controls();
+        controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+        controls.set(libcamera::controls::draft::NoiseReductionMode, 
+          libcamera::controls::draft::NoiseReductionModeOff);
+
+        requests.push_back(std::move(request));
+    }
+
+    for (const auto& buffer : frame_buffers[stillcapture_stream]) {
+        std::unique_ptr<libcamera::Request> request = camera->createRequest();
+        if (!request)
+        {
+            LOG_ERR << "Can't create request" << std::endl;
+            return;// -ENOMEM;
+        }
+
+        int ret = request->addBuffer(stillcapture_stream, buffer.get());
+        if (ret < 0)
+        {
+            LOG_ERR << "Can't set buffer for request" << std::endl;
+            return;// ret;
+        }
+        libcamera::ControlList &controls = request->controls();
+        controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+        controls.set(libcamera::controls::draft::NoiseReductionMode, 
+          libcamera::controls::draft::NoiseReductionModeHighQuality);
+
+        stillcapture_requests.push_back(std::move(request));
     }
 }
 
@@ -200,44 +206,31 @@ void PiCamera::requestComplete(libcamera::Request *request)
 
     // Can be done outside of this as a callback, handle update to buffer 
     // Viewfinder buffers 4 frames at a time - just process one 
-    // TODO: am I not processing enoguh frames in this method from the viewfinder?
     libcamera::Stream *viewfinder_stream = config->at(1).stream();
     libcamera::Stream *stillcapture_stream = config->at(0).stream();
-    libcamera::FrameBuffer *viewfinder_buffer = request->findBuffer(viewfinder_stream); //frame_buffers[stream][0].get();
+    libcamera::FrameBuffer *viewfinder_buffer = request->findBuffer(viewfinder_stream); 
     libcamera::FrameBuffer *stillcapture_buffer = request->findBuffer(stillcapture_stream);
-
-    // Get Controls to set camera settings 
-    libcamera::ControlList &controls = request->controls();
 
     if (viewfinder_buffer) {
         std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[viewfinder_buffer];
         frame_manager->update(mapped_span[0].data(), mapped_span[0].size());
-    }
-    
-    else if (stillcapture_buffer) {
-        if (capture_mode == eCaptureQueued) {
-            std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
-            frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
-//            controls.set(libcamera::controls::draft::NoiseReductionMode, 
-//              libcamera::controls::draft::NoiseReductionModeOff);
-            capture_mode = eCaptureAvailable; // indicate capture is available
-        }
-        else if (capture_mode == eCaptureRequested) {
-            LOG << "requested\n";
-//            controls.set(libcamera::controls::draft::NoiseReductionMode, 
-//              libcamera::controls::draft::NoiseReductionModeHighQuality); 
-            capture_mode = eCaptureQueued; // queue for next capture
-        }
+        request->reuse(libcamera::Request::ReuseBuffers);
+
+        libcamera::ControlList &controls = request->controls();
+        controls.set(libcamera::controls::AwbMode, libcamera::controls::AwbAuto);
+        controls.set(libcamera::controls::draft::NoiseReductionMode, 
+          libcamera::controls::draft::NoiseReductionModeOff);
+
+        camera->queueRequest(request); 
     }
     
     else {
-        LOG << "not a valid buffer?" << std::endl;
+        if (capture_mode == eCaptureRequested) {
+            std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
+            frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
+            capture_mode = eCaptureAvailable; // indicate capture is available
+        }
     }
-
-    //std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[buffer];
-    //frame_manager->update(mapped_span[0].data(), mapped_span[0].size());
-    request->reuse(libcamera::Request::ReuseBuffers);
-    camera->queueRequest(request); 
 
 }
 
@@ -251,26 +244,6 @@ std::shared_ptr<libcamera::Camera> PiCamera::GetCamera() {
 
 void PiCamera::Configure() { 
     // Generate config for both Viewfinder and StillCapture
-/*
-    config = camera->generateConfiguration( {libcamera::StreamRole::Viewfinder, libcamera::StreamRole::StillCapture } );
-
-    LOG << "Default viewfinder configuration is: " << config->at(0).toString() << std::endl;
-    viewfinder_config = std::make_shared<libcamera::StreamConfiguration>(config->at(0));
-    config->at(0).size.width = viewfinder_width;
-    config->at(0).size.height = viewfinder_height;
-    config->at(0).pixelFormat = libcamera::formats::YUV420;
-
-    LOG << "Default still capture configuration is: " << config->at(1).toString() << std::endl;
-    stillcapture_config = std::make_shared<libcamera::StreamConfiguration>(config->at(1));
-    config->at(1).size.width = stillcapture_width;
-    config->at(1).size.height = stillcapture_height;
-
-    LOG << "Config Status: " << config->validate() << "\n";
-    LOG << "Validated still capture configuration is: " << config->at(1).toString() << std::endl;
-
-    vf_stride = config->at(0).stride;
-    sc_stride = config->at(1).stride;
-*/
     config = camera->generateConfiguration( {libcamera::StreamRole::StillCapture, libcamera::StreamRole::Viewfinder} );
 
     LOG << "Default viewfinder configuration is: " << config->at(1).toString() << std::endl;
@@ -278,6 +251,7 @@ void PiCamera::Configure() {
     config->at(1).size.width = viewfinder_width;
     config->at(1).size.height = viewfinder_height;
     config->at(1).pixelFormat = libcamera::formats::YUV420;
+    config->at(1).bufferCount = 2;
     LOG << config->at(1).bufferCount << "\n";
 
     LOG << "Default still capture configuration is: " << config->at(0).toString() << std::endl;
@@ -295,30 +269,7 @@ void PiCamera::Configure() {
 
     camera->configure(config.get());
 }
-/*
-void PiCamera::ConfigureViewfinder() { // TODO: pass in parameters?
-    config = camera->generateConfiguration( { libcamera::StreamRole::Viewfinder } );
-    
-    LOG << "Default viewfinder configuration is: " << config->at(0).toString() << std::endl;
-    config->at(0).size.width = 1296;
-    config->at(0).size.height = 972;
-    config->validate();
-    LOG << "Validated viewfinder configuration is: " << config->at(0).toString() << std::endl;
-    camera->configure(config.get());
-    //stream = config->at(0).stream();// this now happens before the full config is validated? idk
-}
 
-void PiCamera::ConfigureStillCapture() {
-    config = camera->generateConfiguration( { libcamera::StreamRole::StillCapture } );
-
-    LOG << "Default still capture configuration is: " << config->at(0).toString() << std::endl;
-    config->at(0).size.width = 1296;
-    config->at(0).size.height = 972;
-    config->validate();
-    LOG << "Validated still capture configuration is: " << config->at(0).toString() << std::endl;
-    camera->configure(config.get());
-}
-*/
 void PiCamera::StartCamera() {
     camera->start();
     for (std::unique_ptr<libcamera::Request> &request : requests)
@@ -331,6 +282,7 @@ void PiCamera::StopCamera() {
     delete allocator;
     camera->requestCompleted.disconnect(requestComplete);
     requests.clear();
+    stillcapture_requests.clear();
     config.reset();
 }
 

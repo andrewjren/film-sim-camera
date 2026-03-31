@@ -23,6 +23,7 @@ class PiCamera {
     static std::shared_ptr<libcamera::Camera> camera;
     std::unique_ptr<libcamera::CameraManager> camera_manager;
     std::vector<std::unique_ptr<libcamera::Request>> requests;
+    std::vector<std::unique_ptr<libcamera::Request>> stillcapture_requests;
     libcamera::FrameBufferAllocator *allocator;
     static std::unique_ptr<libcamera::CameraConfiguration> config;
     libcamera::Stream *stream;
