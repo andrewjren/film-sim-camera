@@ -67,7 +67,6 @@ int main(int argc, char **argv)
         return -1;
     }
     std::unique_ptr<Touchscreen> touchscreen(new Touchscreen(argv[1]));
-    //touchscreen->PollEvents();
 
     /* check which DRM device to open */
 //    if (argc > 1)
@@ -184,9 +183,9 @@ int main(int argc, char **argv)
 
         }
         
-        if (frame_manager->data_available()) {
+        if (frame_manager->swap_buffers(vec_frame)) {
             // get data 
-            frame_manager->swap_buffers(vec_frame);
+            //frame_manager->swap_buffers(vec_frame);
             shader_manager->ViewfinderRender(vec_frame, picamera->vf_stride, [&](void *data, size_t size) {
                 // write to DRM display
 				for (iter = modeset_list; iter; iter = iter->next) {
@@ -216,6 +215,7 @@ int main(int argc, char **argv)
 
     /* cleanup everything */
     modeset_cleanup(fd);
+    frame_manager->Stop();
 
     ret = 0;
 

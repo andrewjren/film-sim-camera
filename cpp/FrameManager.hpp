@@ -5,6 +5,7 @@
 #include <mutex>
 #include <vector>
 #include <cstring>
+#include <condition_variable>
 #include <log.hpp>
 
 /* instead of implementing a synchronous queue, allow for camera processor thread to continuously update 
@@ -16,7 +17,8 @@ private:
     std::pair<bool, std::vector<uint8_t>> frame_data; // <data available, pointer to data>
     std::pair<bool, std::vector<uint8_t>> capture_data; // <data available, pointer to data>
     std::mutex mutex;
-    //std::condition_variable cv;
+    std::condition_variable cv;
+    bool shutdown;
 
 public:
     FrameManager() {}
@@ -30,6 +32,7 @@ public:
 
 		memcpy(frame_data.second.data(), ptr, size);
         frame_data.first = true; // indicate that new data is available
+        cv.notify_one();
     }
     
     void update_capture(const void *ptr, size_t size) {
@@ -48,10 +51,16 @@ public:
         return frame_data.first;
     }
 
-    void swap_buffers(std::vector<uint8_t> &vector_in) {
+    bool swap_buffers(std::vector<uint8_t> &vector_in) {
         std::unique_lock<std::mutex> lock(mutex);
-        frame_data.first = false; // processed this data
+        cv.wait(lock, [this]{ return frame_data.first || shutdown; });
+        if (shutdown) {
+            return false;
+        }
+
         frame_data.second.swap(vector_in);
+        frame_data.first = false; // processed this data
+        return true;
     }
 
     void swap_capture(std::vector<uint8_t> &vector_in) {
@@ -64,6 +73,12 @@ public:
         std::unique_lock<std::mutex> lock(mutex);
         frame_data.first = false;
         frame_data.second.clear();
+    }
+
+    void Stop() {
+        std::unique_lock<std::mutex> lock(mutex);
+        shutdown = true;
+        cv.notify_all();
     }
 };
 
