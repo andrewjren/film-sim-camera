@@ -68,8 +68,8 @@ private:
 
     GLuint text_program, text_vert, text_frag;
 
-    int read_index = 1;
-    int write_index = 0;
+    int read_index = 0;
+    int write_index = 1;
     int lut_index = 0;
     int test_width = 2592;
     int test_height = 1944;

@@ -582,8 +582,9 @@ void ShaderManager::ViewfinderRender(std::vector<uint8_t> &vec_frame, int stride
     glUseProgram(program);
 
     // Read Framebuffer for DRM preview
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[write_index]);
     glReadPixels(0, 0, screen_height, screen_width, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, output_pbo[read_index]);
     void* ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, screen_width * screen_height * 4, GL_MAP_READ_BIT);
 
     // use callback function to move memory out, then unmap buffer
