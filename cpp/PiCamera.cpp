@@ -18,6 +18,10 @@ PiCamera::PiCamera(int vf_width, int vf_height, int sc_width, int sc_height) {
     stillcapture_height = sc_height;
 }
 
+PiCamera::~PiCamera() {
+    Cleanup();
+}
+
 void PiCamera::Initialize() {
     capture_mode = eViewfinder;
     camera_manager = std::make_unique<libcamera::CameraManager>();
@@ -277,7 +281,7 @@ void PiCamera::StartCamera() {
         camera->queueRequest(request.get());
 }
 
-void PiCamera::StopCamera() {
+void PiCamera::Cleanup() {
     camera->stop();
     //allocator->free(stream);
     delete allocator;
@@ -285,12 +289,6 @@ void PiCamera::StopCamera() {
     requests.clear();
     stillcapture_requests.clear();
     config.reset();
-}
-
-void PiCamera::Cleanup() {
-    camera->stop();
-    //allocator->free(stream);
-    delete allocator;
     camera->release();
     camera.reset();
     camera_manager->stop();

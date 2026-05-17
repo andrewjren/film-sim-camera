@@ -138,6 +138,7 @@ public:
     int GetViewfinderHeight();
     int GetViewfinderWidth();
     int GetNumLuts();
+    std::string GetCurrentLUTName();
 }; // ShaderManager 
 
 #endif // SHADERMANAGER_HPP

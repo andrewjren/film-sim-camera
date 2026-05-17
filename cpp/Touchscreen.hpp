@@ -83,6 +83,10 @@ public:
         prev_shader = false;
         return curr_prev_shader;
     }
+
+    bool ProcessShutdownRequest() {
+        return shutdown_request;
+    }
        
 
 
@@ -97,6 +101,7 @@ private:
     bool photo_request = false;
     bool next_shader = false;
     bool prev_shader = false;
+    bool shutdown_request = false;
 
     enum TouchState {
         RELEASED,
@@ -149,7 +154,13 @@ private:
     
     void ProcessTouchState() {
         if (touch_state == TouchState::TRIGGERED && drag_direction == DragDirection::NONE) {
-            RequestPhoto();
+            // detect if bottom right corner
+            if (touchup_pos.pos_x < 10 && touchup_pos.pos_y > 470) {
+                RequestShutdown();
+            }
+            else {
+                RequestPhoto();
+            }
             touch_state = TouchState::RELEASED;
             last_release = std::chrono::system_clock::now();
         }
@@ -184,6 +195,10 @@ private:
 
     void PrevShader() {
         prev_shader = true;
+    }
+    
+    void RequestShutdown() {
+        shutdown_request = true;
     }
 
     void DetectDirection(ScreenPosition initial_pos, ScreenPosition final_pos) {

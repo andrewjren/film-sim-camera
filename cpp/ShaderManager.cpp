@@ -812,3 +812,8 @@ void ShaderManager::RenderText(std::string text, float x, float y, float scale, 
     
     //glDisable(GL_BLEND);
 }
+
+std::string ShaderManager::GetCurrentLUTName()
+{
+    return lut_data[lut_idx].Name;
+}

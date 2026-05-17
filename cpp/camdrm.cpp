@@ -4,6 +4,7 @@
 #include <gbm.h>
 #include <filesystem>
 #include <sstream>
+#include <cstdlib>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -165,6 +166,11 @@ int main(int argc, char **argv)
         prev_shader = touchscreen->ProcessPrevShader();
         next_shader = touchscreen->ProcessNextShader();
         
+        if (touchscreen->ProcessShutdownRequest()) {
+            LOG << "Shutdown Requested..." << std::endl;
+            break;
+        }
+        
 
         if (photo_requested) {
             LOG << "Frame: " << num_frame << std::endl;
@@ -186,7 +192,7 @@ int main(int argc, char **argv)
             ss << save_dir << "/";
             ss << "capture_";
             ss << std::setfill('0') << std::setw(5) << capture_num;
-            ss << "_" << "filter_name" << ".png";
+            ss << "_" << shader_manager->GetCurrentLUTName() << ".png";
             
             stbi_write_png(ss.str().c_str(), shader_manager->GetStillCaptureWidth(), shader_manager->GetStillCaptureHeight(), 4, rgb_out.data(),shader_manager->GetStillCaptureWidth()*4); 
 /*            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetStillCaptureWidth(), height = shader_manager->GetStillCaptureHeight()]() {
@@ -254,6 +260,8 @@ int main(int argc, char **argv)
     } else {
         fprintf(stderr, "exiting\n");
     }
+
+    std::system("sudo shutdown -h now");
     return ret;
 }
 

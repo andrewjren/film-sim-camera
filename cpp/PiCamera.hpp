@@ -37,6 +37,7 @@ class PiCamera {
 
     public:
     PiCamera(int, int, int, int);
+    ~PiCamera();
     static CaptureMode capture_mode; 
     static std::shared_ptr<FrameManager> frame_manager;
     std::shared_ptr<libcamera::StreamConfiguration> viewfinder_config;
@@ -52,7 +53,6 @@ class PiCamera {
     void StartCamera();
     //void StartViewfinder();
     //void StartStillCapture();
-    void StopCamera();
     void SetFrameManager(std::shared_ptr<FrameManager>);
     void Cleanup();
     void MapBuffers();
