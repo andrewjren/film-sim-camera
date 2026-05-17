@@ -2,6 +2,8 @@
 #include <thread>
 #include <chrono>
 #include <gbm.h>
+#include <filesystem>
+#include <sstream>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -119,6 +121,26 @@ int main(int argc, char **argv)
     shader_manager->Initialize();
 
 	picamera->StartCamera();
+
+
+    // Save Directory Init
+    int capture_num = 0;
+    std::string save_dir = std::string(std::getenv("HOME")) + "/codac/save/";
+    for (const auto & entry : std::filesystem::directory_iterator(save_dir)) {
+        // for now, assume that saved photos are in format:
+        // capture_#####_<filter>.jpg 
+        // where 5 digits are used for the number. this just makes getting the max number easier
+
+        // get just file name
+        std::string file_name = entry.path().filename();
+
+        int curr_num = std::stoi(file_name.substr(8,5));
+        if (curr_num > capture_num) {
+            capture_num = curr_num;
+        }
+    }
+    capture_num++; // get next number
+    LOG << "Current File Number: " << capture_num << "\n";
     
     // initialize variables
     int num_frame = 0;
@@ -160,12 +182,18 @@ int main(int argc, char **argv)
                 // Get data out of buffer
 				memcpy(rgb_out.data(), data, size);
             });
-
-            stbi_write_png("debug-capture.png", shader_manager->GetStillCaptureWidth(), shader_manager->GetStillCaptureHeight(), 4, rgb_out.data(),shader_manager->GetStillCaptureWidth()*4); 
+            std::stringstream ss; 
+            ss << save_dir << "/";
+            ss << "capture_";
+            ss << std::setfill('0') << std::setw(5) << capture_num;
+            ss << "_" << "filter_name" << ".png";
+            
+            stbi_write_png(ss.str().c_str(), shader_manager->GetStillCaptureWidth(), shader_manager->GetStillCaptureHeight(), 4, rgb_out.data(),shader_manager->GetStillCaptureWidth()*4); 
 /*            std::thread([rgb_out = std::move(rgb_out), width = shader_manager->GetStillCaptureWidth(), height = shader_manager->GetStillCaptureHeight()]() {
             stbi_write_png("debug-capture.png", width, height, 4, rgb_out.data(), width*4);
             }).detach();
 */
+            capture_num++;
             picamera->CaptureComplete();
             num_frame++;
         }
