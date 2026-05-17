@@ -229,6 +229,7 @@ void PiCamera::requestComplete(libcamera::Request *request)
             std::vector<libcamera::Span<uint8_t>> mapped_span = mapped_buffers[stillcapture_buffer];
             frame_manager->update_capture(mapped_span[0].data(), mapped_span[0].size());
             capture_mode = eCaptureAvailable; // indicate capture is available
+            request->reuse(libcamera::Request::ReuseBuffers);
         }
     }
 
