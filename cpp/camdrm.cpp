@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     void* ptr; 
     int lut_index = 0;
     std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
-    while(num_frame < 1000) {
+    while(true) {
 
         touchscreen->PollEvents();
         photo_requested = touchscreen->ProcessPhotoRequest();
